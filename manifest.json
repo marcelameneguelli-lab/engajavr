@@ -1,0 +1,25 @@
+{
+  "name": "EngajaVR — Estácio Volta Redonda",
+  "short_name": "EngajaVR",
+  "description": "Sistema de engajamento e monitoramento de alunos",
+  "start_url": "/engajavr/",
+  "scope": "/engajavr/",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#3b5bdb",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
