@@ -500,6 +500,40 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .logo-drop input { display:none; }
 .logo-preview-wrap { display:none; text-align:center; margin-bottom:12px; }
 .logo-preview-wrap img { max-height:80px; max-width:200px; border-radius:8px; border:1px solid var(--border); }
+
+/* Update banner */
+#update-banner {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 99999;
+  background: #1971c2;
+  color: #fff;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  animation: slideDown .25s ease;
+}
+#update-banner.visible { display: flex; }
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+#update-banner .upd-msg { flex: 1; }
+#update-banner .upd-btn {
+  background: #fff; color: #1971c2; border: none; border-radius: 6px;
+  padding: 5px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
+  white-space: nowrap; transition: background .12s;
+}
+#update-banner .upd-btn:hover { background: #e7f0fb; }
+#update-banner .upd-close {
+  background: transparent; color: rgba(255,255,255,.7); border: none;
+  font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;
+}
+#update-banner.visible ~ * { padding-top: 38px; }
 </style>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b5bdb">
@@ -510,6 +544,12 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
   <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
+
+<div id="update-banner" role="alert" aria-live="polite">
+  <span class="upd-msg">🔄 Nova versão do EngajaVR disponível!</span>
+  <button class="upd-btn" onclick="applyUpdate()">Atualizar agora</button>
+  <button class="upd-close" onclick="document.getElementById('update-banner').classList.remove('visible')" title="Fechar">✕</button>
+</div>
 
 <div class="loading-overlay" id="loading">
   <div class="spinner"></div>
@@ -4016,11 +4056,21 @@ window.addEventListener('load', init);
 
 // Registrar Service Worker apenas em HTTPS (PWA — não funciona em file://)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  var _hadSWController = !!navigator.serviceWorker.controller;
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('sw.js')
       .then(function(reg) { console.log('SW registrado:', reg.scope); })
       .catch(function(err) { console.log('SW erro:', err); });
+    navigator.serviceWorker.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'SW_UPDATED' && _hadSWController) {
+        document.getElementById('update-banner').classList.add('visible');
+      }
+    });
   });
+}
+
+function applyUpdate() {
+  window.location.reload(true);
 }
 
 
@@ -6075,7 +6125,7 @@ function importarEventos(input) {
 
 <div class="ev-alertas-wrap" id="ev-alertas-wrap"></div>
 <div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);background:var(--surface);z-index:100">
-  Desenvolvido por <strong style="color:var(--text2)">Marcela Meneguelli</strong> · EngajaVR v1 · Estácio Volta Redonda
+  Desenvolvido por <strong style="color:var(--text2)">Marcela Meneguelli</strong> · <span id="footer-version">EngajaVR v2</span> · Estácio Volta Redonda
 </div>
 </body>
 </html>
