@@ -37,7 +37,8 @@
   --shadow-md: 0 4px 12px rgba(0,0,0,.1), 0 2px 4px rgba(0,0,0,.06);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+html { height: -webkit-fill-available; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; min-height: -webkit-fill-available; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Layout */
 .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 12px; display: flex; align-items: center; gap: 8px; height: 46px; flex-shrink: 0; }
@@ -500,6 +501,75 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .logo-drop input { display:none; }
 .logo-preview-wrap { display:none; text-align:center; margin-bottom:12px; }
 .logo-preview-wrap img { max-height:80px; max-width:200px; border-radius:8px; border:1px solid var(--border); }
+
+/* Footer */
+.app-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 5px; font-size: 11px; color: var(--text3); border-top: 1px solid var(--border); background: var(--surface); z-index: 100; }
+
+/* ========== LANDSCAPE MOBILE ========== */
+/* Targets phones in landscape (height ≤ 500 px) */
+@media (max-height: 500px) and (orientation: landscape) {
+
+  /* --- Topbar compacta --- */
+  .topbar {
+    height: 36px;
+    padding: 0 6px;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .topbar::-webkit-scrollbar { display: none; }
+
+  /* Logo: só ícone, sem texto */
+  .logo { gap: 6px; }
+  #logo-titulo { display: none; }
+  .logo-img, .logo-icon { width: 26px; height: 26px; font-size: 11px; }
+
+  /* Tab-bar: rolagem horizontal */
+  .tab-bar {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    margin-left: 8px;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab { padding: 3px 8px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+
+  /* Base selector: compacto */
+  .base-selector { gap: 2px; margin-left: 6px; flex-shrink: 0; }
+  .base-btn { padding: 3px 6px; font-size: 10px; }
+
+  /* Status: oculto */
+  .topbar-right { display: none; }
+
+  /* Priority-bar: menor */
+  .priority-bar { padding: 4px 8px; gap: 4px; }
+  .pb-label { display: none; }
+  .prio-pill { padding: 3px 8px; font-size: 11px; height: 24px; }
+  .prio-pill .pcount { padding: 0 4px; }
+
+  /* Filters: menor */
+  .filters { padding: 5px 8px; gap: 5px; }
+  select, input[type=text] { height: 26px; font-size: 11px; }
+  .btn { height: 26px; padding: 0 8px; font-size: 11px; }
+  .btn-sm { height: 22px; }
+  .search-input { width: 140px; }
+
+  /* Tabela: linhas mais finas */
+  thead th { padding: 6px 8px; font-size: 10px; }
+  tbody td { padding: 5px 8px; font-size: 11px; }
+
+  /* Footer rodapé */
+  .main { padding-bottom: 20px; }
+  .app-footer { padding: 3px; font-size: 10px; }
+
+  /* Paginação compacta */
+  .pagination { padding: 5px 8px; font-size: 11px; }
+}
 
 /* Rotate prompt — visible only in portrait on small screens */
 #rotate-prompt {
@@ -6158,7 +6228,7 @@ function importarEventos(input) {
 </div>
 
 <div class="ev-alertas-wrap" id="ev-alertas-wrap"></div>
-<div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);background:var(--surface);z-index:100">
+<div class="app-footer">
   Desenvolvido por <strong style="color:var(--text2)">Marcela Meneguelli</strong> · <span id="footer-version">EngajaVR v2</span> · Estácio Volta Redonda
 </div>
 </body>
