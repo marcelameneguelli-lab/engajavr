@@ -4578,6 +4578,34 @@ function renderTutoriais() {
   }).join('');
 }
 
+
+// Gera conteúdo de arquivo .eml — abre direto no Outlook sem passar pelo browser/Gmail
+function gerarEML(to, subject, body, bcc) {
+  var now = new Date().toUTCString();
+  var lines = [
+    'MIME-Version: 1.0',
+    'Date: ' + now,
+    'To: ' + to,
+    bcc ? 'Bcc: ' + bcc : '',
+    'Subject: =?UTF-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: quoted-printable',
+    '',
+    body
+  ].filter(function(l) { return l !== ''; });
+  return lines.join('\r\n');
+}
+
+function downloadEML(content, filename) {
+  var blob = new Blob([content], { type: 'message/rfc822' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function copyToClipboard(text) {
   try { navigator.clipboard.writeText(text); showToast('📋 Link copiado!'); } catch(e) {}
 }
@@ -5665,46 +5693,40 @@ async function executarLote(canal) {
   // Para e-mail: abrir cliente de e-mail (Outlook/mailto) para cada destinatário
   // OU enviar via GAS se preferir
   if (canal === 'E-mail' && emailList.length > 0) {
-    // Estratégia: abrir mailto para os primeiros 5 (limite do browser) 
-    // E gerar CSV com todos os dados para disparo manual/externo
-    var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
-      emailList.map(function(e) {
-        var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
-        return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
-      }).join('\n');
-    var emailBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
-    var emailUrl  = URL.createObjectURL(emailBlob);
-    var emailLink = document.createElement('a');
-    emailLink.href = emailUrl;
-    emailLink.download = 'emails-lote-' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '-' + emailList.length + '.csv';
-    emailLink.click();
-    URL.revokeObjectURL(emailUrl);
+    // Gerar arquivo .eml para cada destinatário — abre direto no Outlook sem passar pelo browser
+    // Para lotes grandes, gerar um .eml com múltiplos destinatários em BCC
+    if (emailList.length === 1) {
+      // Um único destinatário — .eml individual
+      var em0 = emailList[0];
+      var emlContent = gerarEML(em0.email, em0.subj, em0.msg);
+      downloadEML(emlContent, 'email-' + em0.matricula + '.eml');
+    } else {
+      // Múltiplos destinatários — um .eml com todos em BCC + CSV como backup
+      var primeiroEmail = emailList[0];
+      var bccList = emailList.slice(1).map(function(e) { return e.email; }).join(', ');
+      var corpoLote = emailList.map(function(e, i) {
+        return (i+1) + '. ' + e.nome + ' (' + e.email + ')\n' + e.msg;
+      }).join('\n\n---\n\n');
+      var emlLote = gerarEML(
+        primeiroEmail.email,
+        primeiroEmail.subj + ' [' + emailList.length + ' destinatários]',
+        corpoLote,
+        bccList
+      );
+      downloadEML(emlLote, 'emails-lote-' + emailList.length + '-destinatarios.eml');
 
-    // Tentar abrir mailto para os primeiros (até 3 para não sobrecarregar o browser)
-    var maxMailto = Math.min(emailList.length, 3);
-    for (var ei = 0; ei < maxMailto; ei++) {
-      var em = emailList[ei];
-      var subj2 = encodeURIComponent(em.subj);
-      var body2 = encodeURIComponent(em.msg);
-      var mailtoLink = document.createElement('a');
-      mailtoLink.href = 'mailto:' + em.email + '?subject=' + subj2 + '&body=' + body2;
-      mailtoLink.target = '_blank';
-      // Delay para abrir um por vez sem travar
-      (function(link, delay) {
-        setTimeout(function() { link.click(); }, delay);
-      })(mailtoLink, ei * 800);
-    }
-
-    // Também tentar via GAS se configurado (envio em background)
-    if (GAS_URL) {
-      var emailPayload = emailList.map(function(e) {
-        return { to: e.email, subject: e.subj, body: e.msg, nome: e.nome };
-      });
-      gasCall('sendEmailLote', { emails: emailPayload }).then(function(emailResult) {
-        if (emailResult && emailResult.ok) {
-          showToast('✅ ' + (emailResult.enviados||emailList.length) + ' e-mails enviados via GAS!');
-        }
-      }).catch(function(){});
+      // Também gerar CSV como backup
+      var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
+        emailList.map(function(e) {
+          var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
+          return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
+        }).join('\n');
+      var csvBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
+      var csvUrl = URL.createObjectURL(csvBlob);
+      var csvLink = document.createElement('a');
+      csvLink.href = csvUrl;
+      csvLink.download = 'emails-lote-' + emailList.length + '.csv';
+      setTimeout(function() { csvLink.click(); URL.revokeObjectURL(csvUrl); }, 500);
     }
   }
 
@@ -5718,7 +5740,7 @@ async function executarLote(canal) {
   // Resultado
   var txt = '✅ ' + comSucesso.length + ' acionamentos registrados.';
   if (canal === 'WhatsApp') txt += ' CSV exportado com ' + rows.length + ' números.';
-  if (canal === 'E-mail')   txt += ' CSV com ' + emailList.length + ' e-mails exportado. ' + (GAS_URL ? 'Envio via GAS iniciado em background.' : 'Configure o GAS para envio automático.');
+  if (canal === 'E-mail')   txt += ' Arquivo .eml gerado com ' + emailList.length + ' destinatário(s) — abra no Outlook para enviar.';
   if (semContato.length) txt += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
   resEl.className = 'lote-result ok';
   resEl.textContent = txt;
