@@ -6122,5 +6122,124 @@ function importarEventos(input) {
 <div style="text-align:center;padding:10px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);background:var(--surface)">
   Desenvolvido por <strong style="color:var(--text2)">Marcela Meneguelli</strong> · EngajaVR v1 · Estácio Volta Redonda
 </div>
+
+<div class="relatorio-overlay" id="relatorio-overlay" style="display:none" onclick="if(event.target===this)fecharRelatorio()">
+    <div class="relatorio-box">
+      <div class="relatorio-header">
+        <h3>📋 Relatório do Dia — <span id="rel-data"></span></h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-primary" onclick="copiarRelatorio()">📋 Copiar</button>
+          <button class="btn btn-sm" onclick="baixarRelatorio()">⬇️ Baixar .txt</button>
+          <button class="btn btn-sm" onclick="fecharRelatorio()">✕</button>
+        </div>
+      </div>
+      <div class="relatorio-body" id="relatorio-body"></div>
+      <div class="relatorio-footer">
+        <div style="flex:1;font-size:11px;color:var(--text3);align-self:center" id="rel-email-destino"></div>
+        <button class="btn btn-primary" onclick="enviarRelatorioDiarioGAS()" title="Enviar por e-mail agora">📧 Enviar agora</button>
+        <button class="btn" onclick="fecharRelatorio()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+<div class="ev-modal-overlay" id="ev-modal-overlay" style="display:none" onclick="if(event.target===this)fecharEvModal()">
+    <div class="ev-modal-box">
+      <div class="ev-modal-header">
+        <h3 id="ev-modal-titulo">Novo Evento</h3>
+        <button class="btn btn-sm" onclick="fecharEvModal()">✕</button>
+      </div>
+      <div class="ev-modal-body">
+        <div class="ev-field">
+          <label>Título *</label>
+          <input type="text" id="ev-titulo" placeholder="Ex: Início das AV Presenciais">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="ev-field">
+            <label>Data início *</label>
+            <input type="date" id="ev-data-ini">
+          </div>
+          <div class="ev-field">
+            <label>Data fim (opcional)</label>
+            <input type="date" id="ev-data-fim">
+          </div>
+        </div>
+        <div class="ev-field">
+          <label>Tipo</label>
+          <div class="ev-tipo-grid" id="ev-tipo-grid"></div>
+        </div>
+        <div class="ev-field">
+          <label>Descrição</label>
+          <textarea id="ev-desc" placeholder="Detalhes do evento..."></textarea>
+        </div>
+        <div class="ev-field">
+          <label>Semestre / Base</label>
+          <select id="ev-semestre">
+            <option value="todos">📚 Todos os semestres</option>
+            <option value="impar">🔵 Semestre Ímpar</option>
+            <option value="par">🟢 Semestre Par</option>
+            <option value="ct">🔴 Curso Técnico</option>
+          </select>
+        </div>
+        <div class="ev-field">
+          <label>Turma / Público-alvo (opcional)</label>
+          <input type="text" id="ev-turma" placeholder="Ex: EAD, Presencial, 1° período...">
+        </div>
+        <div id="ev-modal-erro" style="color:var(--red);font-size:12px;margin-top:4px"></div>
+      </div>
+      <div class="ev-modal-footer">
+        <button class="btn btn-sm" id="ev-btn-excluir" onclick="excluirEvento()" style="display:none;margin-right:auto;color:var(--red);border-color:var(--red)">🗑️ Excluir</button>
+        <button class="btn" onclick="fecharEvModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarEvento()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+
+<div class="lote-overlay" id="lote-overlay" style="display:none" onclick="if(event.target===this)fecharLote()">
+    <div class="lote-box">
+      <div class="lote-header">
+        <h3 id="lote-title">📨 Disparo em Lote</h3>
+        <button class="btn btn-sm" onclick="fecharLote()">✕</button>
+      </div>
+      <div class="lote-body">
+        <div class="lote-field">
+          <label>Atendente</label>
+          <select id="lote-atend" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)"><option value="">Selecione o atendente...</option></select>
+        </div>
+        <div class="lote-field">
+          <label>Motivo</label>
+          <select id="lote-motivo" onchange="atualizarPreviewLote()">
+            <option value="">Selecione...</option>
+            <option value="financeiro">💰 Financeiro</option>
+            <option value="academico">📚 Acadêmico</option>
+          </select>
+        </div>
+        <div class="lote-field">
+          <label>Canal</label>
+          <select id="lote-canal" onchange="atualizarPreviewLote()">
+            <option value="">Selecione...</option>
+            <option value="WhatsApp">💬 WhatsApp</option>
+            <option value="E-mail">✉️ E-mail</option>
+            <option value="Ligação">📞 Ligação</option>
+            <option value="Presencial">🏢 Presencial</option>
+          </select>
+        </div>
+        <div class="lote-field">
+          <label>Observação (opcional)</label>
+          <input type="text" id="lote-obs" placeholder="Ex: Disparo em lote — campanha maio/2026">
+        </div>
+        <div class="lote-field" id="lote-preview-wrap" style="display:none">
+          <label>Preview da mensagem (1° aluno)</label>
+          <div class="lote-preview" id="lote-preview"></div>
+        </div>
+        <div id="lote-result"></div>
+      </div>
+      <div class="lote-footer">
+        <span style="font-size:12px;color:var(--text3);align-self:center" id="lote-footer-info"></span>
+        <button class="btn" onclick="fecharLote()">Cancelar</button>
+        <button class="btn btn-primary" onclick="executarLote('')">✅ Registrar acionamentos</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
