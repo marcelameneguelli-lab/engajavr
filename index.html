@@ -500,40 +500,6 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .logo-drop input { display:none; }
 .logo-preview-wrap { display:none; text-align:center; margin-bottom:12px; }
 .logo-preview-wrap img { max-height:80px; max-width:200px; border-radius:8px; border:1px solid var(--border); }
-
-/* Update banner */
-#update-banner {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 99999;
-  background: #1971c2;
-  color: #fff;
-  padding: 9px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
-  animation: slideDown .25s ease;
-}
-#update-banner.visible { display: flex; }
-@keyframes slideDown {
-  from { transform: translateY(-100%); opacity: 0; }
-  to   { transform: translateY(0);     opacity: 1; }
-}
-#update-banner .upd-msg { flex: 1; }
-#update-banner .upd-btn {
-  background: #fff; color: #1971c2; border: none; border-radius: 6px;
-  padding: 5px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
-  white-space: nowrap; transition: background .12s;
-}
-#update-banner .upd-btn:hover { background: #e7f0fb; }
-#update-banner .upd-close {
-  background: transparent; color: rgba(255,255,255,.7); border: none;
-  font-size: 16px; cursor: pointer; line-height: 1; padding: 0 4px;
-}
-#update-banner.visible ~ * { padding-top: 38px; }
 </style>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#3b5bdb">
@@ -544,12 +510,6 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
   <link rel="apple-touch-icon" href="icon-192.png">
 </head>
 <body>
-
-<div id="update-banner" role="alert" aria-live="polite">
-  <span class="upd-msg">🔄 Nova versão do EngajaVR disponível!</span>
-  <button class="upd-btn" onclick="applyUpdate()">Atualizar agora</button>
-  <button class="upd-close" onclick="document.getElementById('update-banner').classList.remove('visible')" title="Fechar">✕</button>
-</div>
 
 <div class="loading-overlay" id="loading">
   <div class="spinner"></div>
@@ -793,8 +753,20 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleFileSelect(event)">
         <div id="import-result"></div>
       </div>
+
+      <!-- SharePoint -->
       <div class="chart-card" style="max-width:600px;margin-bottom:16px">
-        <h3>🔗 Conexão Google Sheets (Tempo Real)</h3>
+        <h3>☁️ Importar base do SharePoint</h3>
+        <p style="font-size:12px;color:var(--text3);margin:8px 0 12px;line-height:1.6">
+          Quando o Power Automate detectar um novo CSV na pasta do SharePoint, ele enviará automaticamente para o sistema. Clique abaixo para carregar a base mais recente disponível.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-primary" onclick="importarDoSharePoint('impar')">📘 Buscar Semestre Ímpar</button>
+          <button class="btn btn-primary" onclick="importarDoSharePoint('par')" style="background:#2f9e44">📗 Buscar Semestre Par</button>
+          <button class="btn btn-primary" onclick="importarDoSharePoint('ct')" style="background:#e67700">📙 Buscar Curso Técnico</button>
+        </div>
+        <div id="sharepoint-result" style="font-size:12px;color:var(--text3)"></div>
+      </div>
         <p style="font-size:12px;color:var(--text3);margin:8px 0 12px;line-height:1.6">
           Para múltiplos atendentes simultâneos, conecte a um Google Apps Script. 
           Cole a URL do Web App publicado abaixo. O histórico será salvo na planilha e sincronizado a cada 15 segundos entre todos os atendentes.
@@ -1397,10 +1369,22 @@ async function syncFromRemote() {
 
   let changed = false;
   if (GAS_URL) {
-    const [hr, cr] = await Promise.all([
+    const [hr, cr, ar] = await Promise.all([
       gasCall('getHistory', { base: ACTIVE_BASE }),
-      gasCall('getContacts')
+      gasCall('getContacts'),
+      gasCall('getAtendentes')
     ]);
+    // Sincronizar atendentes
+    if (ar && ar.ok && ar.data && ar.data.length) {
+      var novosAtends = ar.data.filter(function(a) { return !ATENDENTES.includes(a); });
+      if (novosAtends.length) {
+        ATENDENTES = ATENDENTES.concat(novosAtends);
+        ATENDENTES.sort();
+        try { localStorage.setItem('crm_atendentes', JSON.stringify(ATENDENTES)); } catch(e) {}
+        renderAtendentes();
+        populateAtendSelects();
+      }
+    }
     if (hr && hr.ok && hr.data) {
       // Mesclar com histórico local (não substituir — preservar acionamentos locais)
       let mergeChanged = false;
@@ -1595,6 +1579,21 @@ async function init() {
   if (gasInput) gasInput.value = GAS_URL;
   loadTarefas();
   loadTutoriais();
+  // Sincronizar atendentes do GAS imediatamente no init
+  if (GAS_URL) {
+    gasCall('getAtendentes').then(function(r) {
+      if (r && r.ok && r.data && r.data.length) {
+        var novos = r.data.filter(function(a) { return !ATENDENTES.includes(a); });
+        if (novos.length) {
+          ATENDENTES = ATENDENTES.concat(novos);
+          ATENDENTES.sort();
+          try { localStorage.setItem('crm_atendentes', JSON.stringify(ATENDENTES)); } catch(e) {}
+          populateAtendSelects();
+          renderAtendentes();
+        }
+      }
+    }).catch(function(){});
+  }
   // Sync from GAS immediately on load (don't wait 15s)
   if (GAS_URL) {
     syncFromRemote().then(() => {
@@ -2126,9 +2125,13 @@ function resetCompleto() {
 // ================================================================
 var ATENDENTES = JSON.parse(localStorage.getItem('crm_atendentes') || '[]');
 
-function saveAtendentes() {
+async function saveAtendentes() {
   try { localStorage.setItem('crm_atendentes', JSON.stringify(ATENDENTES)); } catch(e) {}
-  if (GAS_URL) gasCall('saveAtendentes', { atendentes: ATENDENTES }).catch(function(){});
+  if (GAS_URL) {
+    var r = await gasCall('saveAtendentes', { atendentes: ATENDENTES });
+    if (r && r.ok) showToast('✅ Atendentes salvos no GAS.');
+    else showToast('⚠️ Atendentes salvos localmente. Verifique a URL do GAS.');
+  }
 }
 
 async function syncAtendentesGAS() {
@@ -2156,9 +2159,111 @@ function renderAtendentes() {
   list.innerHTML = ATENDENTES.map(function(nome, i) {
     return '<div class="atend-item">' +
       '<span class="atend-nome">' + nome + '</span>' +
-      '<button class="atend-del" onclick="removerAtendente(' + i + ')">✕ Remover</button>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="btn btn-sm" onclick="abrirRenomearAtendente(' + i + ')" style="font-size:11px;padding:3px 8px">✏️ Renomear</button>' +
+        '<button class="atend-del" onclick="removerAtendente(' + i + ')">✕ Remover</button>' +
+      '</div>' +
     '</div>';
   }).join('');
+}
+
+function abrirRenomearAtendente(idx) {
+  var nomeAtual = ATENDENTES[idx];
+  var novoNome = prompt('Renomear "' + nomeAtual + '" para:', nomeAtual);
+  if (!novoNome || novoNome.trim() === nomeAtual) return;
+  novoNome = novoNome.trim();
+  if (ATENDENTES.includes(novoNome)) {
+    showToast('⚠️ Já existe um atendente com esse nome.');
+    return;
+  }
+  if (!confirm('Renomear "' + nomeAtual + '" para "' + novoNome + '"?\n\nIsso atualizará TODOS os acionamentos, follow-ups e tarefas com o nome antigo.')) return;
+  renomearAtendente(nomeAtual, novoNome);
+}
+
+async function renomearAtendente(nomeAntigo, novoNome) {
+  showToast('⏳ Renomeando em todos os registros...');
+  var count = 0;
+
+  // 1. Atualizar array de atendentes
+  var idx = ATENDENTES.indexOf(nomeAntigo);
+  if (idx >= 0) ATENDENTES[idx] = novoNome;
+  ATENDENTES.sort();
+
+  // 2. Renomear em HISTORY (base ativa em memória)
+  Object.keys(HISTORY).forEach(function(mat) {
+    HISTORY[mat].forEach(function(a) {
+      if (a.atend === nomeAntigo) { a.atend = novoNome; count++; }
+    });
+  });
+
+  // 3. Renomear em HISTORY das outras bases (localStorage)
+  Object.keys(BASE_CONFIG).forEach(function(bk) {
+    if (bk === ACTIVE_BASE) return;
+    try {
+      var raw = localStorage.getItem(BASE_CONFIG[bk].storageH);
+      if (!raw) return;
+      var hist = JSON.parse(raw);
+      var changed = false;
+      Object.keys(hist).forEach(function(mat) {
+        hist[mat].forEach(function(a) {
+          if (a.atend === nomeAntigo) { a.atend = novoNome; changed = true; count++; }
+        });
+      });
+      if (changed) localStorage.setItem(BASE_CONFIG[bk].storageH, JSON.stringify(hist));
+    } catch(e) {}
+  });
+
+  // 4. Renomear em FOLLOWUPS (base ativa)
+  Object.keys(FOLLOWUPS).forEach(function(mat) {
+    FOLLOWUPS[mat].forEach(function(fu) {
+      if (fu.atend === nomeAntigo) { fu.atend = novoNome; count++; }
+    });
+  });
+
+  // 5. Renomear em FOLLOWUPS das outras bases (localStorage)
+  Object.keys(BASE_CONFIG).forEach(function(bk) {
+    if (bk === ACTIVE_BASE) return;
+    try {
+      var raw = localStorage.getItem(BASE_CONFIG[bk].storageF);
+      if (!raw) return;
+      var fus = JSON.parse(raw);
+      var changed = false;
+      Object.keys(fus).forEach(function(mat) {
+        fus[mat].forEach(function(fu) {
+          if (fu.atend === nomeAntigo) { fu.atend = novoNome; changed = true; count++; }
+        });
+      });
+      if (changed) localStorage.setItem(BASE_CONFIG[bk].storageF, JSON.stringify(fus));
+    } catch(e) {}
+  });
+
+  // 6. Renomear em TAREFAS
+  TAREFAS.forEach(function(t) {
+    if (t.atend === nomeAntigo) { t.atend = novoNome; count++; }
+    if (t.criadoPor === nomeAntigo) { t.criadoPor = novoNome; }
+  });
+
+  // 7. Salvar tudo localmente
+  var cfg = BASE_CONFIG[ACTIVE_BASE];
+  try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+  await saveFollowups();
+  saveTarefas();
+  await saveAtendentes();
+
+  // 8. Propagar ao GAS — renomear em todos os registros do servidor
+  if (GAS_URL) {
+    showToast('⏳ Sincronizando com o GAS...');
+    gasCall('renameAtendente', { antigo: nomeAntigo, novo: novoNome }).then(function(r) {
+      if (r && r.ok) showToast('✅ "' + nomeAntigo + '" renomeado para "' + novoNome + '" em ' + (count + (r.renomeados||0)) + ' registro(s) no total.');
+    }).catch(function(){});
+    gasCall('saveHistoryFull', { history: HISTORY, base: ACTIVE_BASE }).catch(function(){});
+    gasCall('saveFollowup', { followups: FOLLOWUPS, base: ACTIVE_BASE }).catch(function(){});
+    gasCall('saveTarefas', { tarefas: TAREFAS }).catch(function(){});
+  }
+
+  renderAtendentes();
+  populateAtendSelects();
+  showToast('✅ "' + nomeAntigo + '" renomeado para "' + novoNome + '" em ' + count + ' registro(s).');
 }
 
 function adicionarAtendente() {
@@ -2886,6 +2991,38 @@ function clearProdFilter() {
 
 // ========== IMPORTAR ==========
 function handleFileSelect(e) { if (e.target.files[0]) processFile(e.target.files[0]); }
+async function importarDoSharePoint(base) {
+  if (!GAS_URL) { showToast('⚠️ Configure a URL do GAS primeiro.'); return; }
+  var resEl = document.getElementById('sharepoint-result');
+  resEl.textContent = '⏳ Buscando base do SharePoint...';
+  try {
+    var r = await gasCall('getSharePointCSV', { base: base });
+    if (!r || !r.ok) {
+      resEl.textContent = '❌ ' + (r && r.error ? r.error : 'Base não disponível no SharePoint ainda.');
+      return;
+    }
+    var obj = r.data;
+    resEl.textContent = '⏳ Processando base de ' + (obj.identificacao || '') + '...';
+    // Processar o CSV exatamente como o upload manual
+    await processCSVText(obj.csv, obj.base || base, obj.identificacao || '');
+    resEl.textContent = '✅ Base ' + BASE_CONFIG[base].label + ' carregada do SharePoint — ' + (obj.identificacao || '') + ' — ' + new Date(obj.updatedAt).toLocaleString('pt-BR');
+  } catch(e) {
+    resEl.textContent = '❌ Erro: ' + e.message;
+  }
+}
+
+// Processar CSV a partir de texto (usado pelo SharePoint e pelo upload manual)
+async function processCSVText(csvText, baseDetectada, identificacao) {
+  if (identificacao) {
+    var semEl = document.getElementById('import-sem-label');
+    if (semEl) semEl.value = identificacao;
+  }
+  // Criar um Blob e processar igual ao upload manual
+  var blob = new Blob([csvText], { type: 'text/csv' });
+  var file = new File([blob], 'sharepoint.csv', { type: 'text/csv' });
+  await processFile(file);
+}
+
 function handleDrop(e) { e.preventDefault(); document.getElementById('drop-area').classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f && f.name.endsWith('.csv')) processFile(f); }
 
 
@@ -4054,23 +4191,23 @@ async function importBackup(e) {
 // ========== START ==========
 window.addEventListener('load', init);
 
+// Avisar usuários que estão abrindo localmente para usar o GitHub Pages
+if (location.protocol === 'file:') {
+  window.addEventListener('DOMContentLoaded', function() {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#e67700;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600';
+    banner.innerHTML = '⚠️ Você está usando a versão local. Para sincronizar com a equipe, acesse: <a href="https://marcelameneguelli-lab.github.io/engajavr/" target="_blank" style="color:#fff;text-decoration:underline">marcelameneguelli-lab.github.io/engajavr</a> &nbsp;<button onclick="this.parentElement.remove()" style="background:rgba(0,0,0,.2);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:8px">✕</button>';
+    document.body.prepend(banner);
+  });
+}
+
 // Registrar Service Worker apenas em HTTPS (PWA — não funciona em file://)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  var _hadSWController = !!navigator.serviceWorker.controller;
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('sw.js')
       .then(function(reg) { console.log('SW registrado:', reg.scope); })
       .catch(function(err) { console.log('SW erro:', err); });
-    navigator.serviceWorker.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'SW_UPDATED' && _hadSWController) {
-        document.getElementById('update-banner').classList.add('visible');
-      }
-    });
   });
-}
-
-function applyUpdate() {
-  window.location.reload(true);
 }
 
 
@@ -4452,6 +4589,33 @@ function renderTutoriais() {
   }).join('');
 }
 
+// Gera conteúdo de arquivo .eml — abre direto no Outlook sem passar pelo browser/Gmail
+function gerarEML(to, subject, body, bcc) {
+  var now = new Date().toUTCString();
+  var lines = [
+    'MIME-Version: 1.0',
+    'Date: ' + now,
+    'To: ' + to,
+    bcc ? 'Bcc: ' + bcc : '',
+    'Subject: =?UTF-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: quoted-printable',
+    '',
+    body
+  ].filter(function(l) { return l !== ''; });
+  return lines.join('\r\n');
+}
+
+function downloadEML(content, filename) {
+  var blob = new Blob([content], { type: 'message/rfc822' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function copyToClipboard(text) {
   try { navigator.clipboard.writeText(text); showToast('📋 Link copiado!'); } catch(e) {}
 }
@@ -4829,12 +4993,17 @@ function updateSendBar(msg) {
     btnWa.style.display = 'none';
   }
 
-  // Email — mailto ou via GAS
+  // Email — gerar .eml que abre no Outlook (não usa mailto para evitar Gmail)
   if (email) {
-    var subj = encodeURIComponent('Estácio Volta Redonda — ' + (CURRENT_MOTIVO === 'financeiro' ? 'Pendência Financeira' : 'Acompanhamento Acadêmico'));
-    var body = encodeURIComponent(msg);
-    btnEmail.href = 'mailto:' + email + '?subject=' + subj + '&body=' + body;
+    var emailSubjModal = 'Estácio Volta Redonda — ' + (CURRENT_MOTIVO === 'financeiro' ? 'Pendência Financeira' : 'Acompanhamento Acadêmico');
+    btnEmail.removeAttribute('href');
     btnEmail.style.display = '';
+    btnEmail.onclick = function(e) {
+      e.preventDefault();
+      var emlContent = gerarEML(email, emailSubjModal, msg);
+      downloadEML(emlContent, 'email-' + (CURRENT_MAT || 'aluno') + '.eml');
+      registrarEnvio('E-mail');
+    };
   } else {
     btnEmail.style.display = 'none';
   }
@@ -5539,46 +5708,41 @@ async function executarLote(canal) {
   // Para e-mail: abrir cliente de e-mail (Outlook/mailto) para cada destinatário
   // OU enviar via GAS se preferir
   if (canal === 'E-mail' && emailList.length > 0) {
-    // Estratégia: abrir mailto para os primeiros 5 (limite do browser) 
-    // E gerar CSV com todos os dados para disparo manual/externo
-    var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
-      emailList.map(function(e) {
-        var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
-        return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
-      }).join('\n');
-    var emailBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
-    var emailUrl  = URL.createObjectURL(emailBlob);
-    var emailLink = document.createElement('a');
-    emailLink.href = emailUrl;
-    emailLink.download = 'emails-lote-' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '-' + emailList.length + '.csv';
-    emailLink.click();
-    URL.revokeObjectURL(emailUrl);
+    // Gerar arquivo .eml para cada destinatário — abre direto no Outlook sem passar pelo browser
+    // Para lotes grandes, gerar um .eml com múltiplos destinatários em BCC
+    if (emailList.length === 1) {
+      // Um único destinatário — .eml individual
+      var em0 = emailList[0];
+      var emlContent = gerarEML(em0.email, em0.subj, em0.msg);
+      downloadEML(emlContent, 'email-' + em0.matricula + '.eml');
+    } else {
+      // Múltiplos destinatários — opção 1: um .eml por destinatário em zip-like download
+      // Opção 2 (mais prática): um .eml com todos em BCC + CSV como backup
+      var primeiroEmail = emailList[0];
+      var bccList = emailList.slice(1).map(function(e) { return e.email; }).join(', ');
+      var corpoLote = emailList.map(function(e, i) {
+        return (i+1) + '. ' + e.nome + ' (' + e.email + ')\n' + e.msg;
+      }).join('\n\n---\n\n');
+      var emlLote = gerarEML(
+        primeiroEmail.email,
+        primeiroEmail.subj + ' [' + emailList.length + ' destinatários]',
+        corpoLote,
+        bccList
+      );
+      downloadEML(emlLote, 'emails-lote-' + emailList.length + '-destinatarios.eml');
 
-    // Tentar abrir mailto para os primeiros (até 3 para não sobrecarregar o browser)
-    var maxMailto = Math.min(emailList.length, 3);
-    for (var ei = 0; ei < maxMailto; ei++) {
-      var em = emailList[ei];
-      var subj2 = encodeURIComponent(em.subj);
-      var body2 = encodeURIComponent(em.msg);
-      var mailtoLink = document.createElement('a');
-      mailtoLink.href = 'mailto:' + em.email + '?subject=' + subj2 + '&body=' + body2;
-      mailtoLink.target = '_blank';
-      // Delay para abrir um por vez sem travar
-      (function(link, delay) {
-        setTimeout(function() { link.click(); }, delay);
-      })(mailtoLink, ei * 800);
-    }
-
-    // Também tentar via GAS se configurado (envio em background)
-    if (GAS_URL) {
-      var emailPayload = emailList.map(function(e) {
-        return { to: e.email, subject: e.subj, body: e.msg, nome: e.nome };
-      });
-      gasCall('sendEmailLote', { emails: emailPayload }).then(function(emailResult) {
-        if (emailResult && emailResult.ok) {
-          showToast('✅ ' + (emailResult.enviados||emailList.length) + ' e-mails enviados via GAS!');
-        }
-      }).catch(function(){});
+      // Também gerar CSV como backup
+      var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
+        emailList.map(function(e) {
+          var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
+          return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
+        }).join('\n');
+      var csvBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
+      var csvUrl = URL.createObjectURL(csvBlob);
+      var csvLink = document.createElement('a');
+      csvLink.href = csvUrl;
+      csvLink.download = 'emails-lote-' + emailList.length + '.csv';
+      setTimeout(function() { csvLink.click(); URL.revokeObjectURL(csvUrl); }, 500);
     }
   }
 
@@ -5592,7 +5756,7 @@ async function executarLote(canal) {
   // Resultado
   var txt = '✅ ' + comSucesso.length + ' acionamentos registrados.';
   if (canal === 'WhatsApp') txt += ' CSV exportado com ' + rows.length + ' números.';
-  if (canal === 'E-mail')   txt += ' CSV com ' + emailList.length + ' e-mails exportado. ' + (GAS_URL ? 'Envio via GAS iniciado em background.' : 'Configure o GAS para envio automático.');
+  if (canal === 'E-mail')   txt += ' Arquivo .eml gerado com ' + emailList.length + ' destinatário(s) — abra no Outlook para enviar.';
   if (semContato.length) txt += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
   resEl.className = 'lote-result ok';
   resEl.textContent = txt;
@@ -6125,7 +6289,7 @@ function importarEventos(input) {
 
 <div class="ev-alertas-wrap" id="ev-alertas-wrap"></div>
 <div style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);background:var(--surface);z-index:100">
-  Desenvolvido por <strong style="color:var(--text2)">Marcela Meneguelli</strong> · <span id="footer-version">EngajaVR v2</span> · Estácio Volta Redonda
+  Desenvolvido por <strong style="color:var(--text2)">Marcela Meneguelli</strong> · EngajaVR v1 · Estácio Volta Redonda
 </div>
 </body>
 </html>
