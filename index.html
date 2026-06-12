@@ -1360,23 +1360,28 @@ async function loadDB(key) {
   // 1. localStorage
   try {
     const raw = localStorage.getItem(k);
-    if (raw && raw !== 'null' && raw !== '[]' && raw.length > 2) {
+    if (raw && raw !== 'null' && raw !== '[]' && raw.length > 10) {
       const db = JSON.parse(raw);
-      if (db && Array.isArray(db) && db.length > 0) { _memStore[k] = db; return db; }
+      if (db && Array.isArray(db) && db.length > 0) {
+        console.log('[loadDB] localStorage:', k, db.length, 'registros');
+        _memStore[k] = db; return db;
+      }
     }
-  } catch(e) {}
+  } catch(e) { console.warn('[loadDB] localStorage erro:', k, e); }
   // 2. IndexedDB
   try {
     const raw2 = await idbGet(k);
-    if (raw2 && raw2.length > 2) {
+    if (raw2 && raw2.length > 10) {
       const db2 = JSON.parse(raw2);
       if (db2 && Array.isArray(db2) && db2.length > 0) {
-        _memStore[k] = db2;
         console.log('[loadDB] IndexedDB:', k, db2.length, 'registros');
+        _memStore[k] = db2;
+        // Tentar copiar para localStorage para acesso mais rápido
+        try { localStorage.setItem(k, raw2); localStorage.setItem(k+'_v', DB_VER); } catch(e) {}
         return db2;
       }
     }
-  } catch(e) {}
+  } catch(e) { console.warn('[loadDB] IndexedDB erro:', k, e); }
   // 3. Legacy comprimido
   if (k === 'crm_db') {
     try {
@@ -1387,6 +1392,7 @@ async function loadDB(key) {
       }
     } catch(e) {}
   }
+  console.warn('[loadDB] base não encontrada em nenhuma fonte:', k);
   return null;
 }
 
@@ -1394,13 +1400,17 @@ async function init() {
   setText('loading-text', 'Carregando base salva...');
   updateBaseSelectorUI();
 
-  // Diagnóstico: logar o que existe no localStorage
+  // Diagnóstico: logar o que existe no localStorage e IndexedDB
   try {
     var keys = ['crm_db','crm_db_par','crm_db_ct'];
     keys.forEach(function(k) {
       var v = localStorage.getItem(k);
-      console.log('[init] localStorage "' + k + '":', v ? (Math.round(v.length/1024) + 'KB, começa com: ' + v.slice(0,30)) : 'VAZIO');
+      console.log('[init] localStorage "' + k + '":', v && v !== 'null' && v.length > 10 ? Math.round(v.length/1024) + 'KB' : 'VAZIO');
     });
+    // Verificar IndexedDB
+    idbGet('crm_db').then(function(v) {
+      console.log('[init] IndexedDB "crm_db":', v ? Math.round(v.length/1024) + 'KB' : 'VAZIO');
+    }).catch(function() { console.log('[init] IndexedDB: não disponível'); });
   } catch(e) {}
 
   await loadBaseData(ACTIVE_BASE);
@@ -3525,7 +3535,16 @@ async function saveFollowups() {
   const cfg = BASE_CONFIG[ACTIVE_BASE];
   try { localStorage.setItem(cfg.storageF, JSON.stringify(FOLLOWUPS)); } catch(e) {}
   await STORE.set(cfg.storageF, FOLLOWUPS);
-  if (GAS_URL) gasCall('saveFollowup', { followups: FOLLOWUPS, base: ACTIVE_BASE }).catch(function(){});
+  if (GAS_URL) {
+    try {
+      await gasCall('saveFollowup', { followups: FOLLOWUPS, base: ACTIVE_BASE });
+    } catch(e) {
+      // Retentar uma vez após 3s
+      setTimeout(function() {
+        gasCall('saveFollowup', { followups: FOLLOWUPS, base: ACTIVE_BASE }).catch(function(){});
+      }, 3000);
+    }
+  }
 }
 
 function renderFollowup() {
@@ -3716,17 +3735,33 @@ async function sincFuGAS() {
           Object.keys(result.data).forEach(function(mat) {
             var fus = result.data[mat];
             if (!FOLLOWUPS[mat]) FOLLOWUPS[mat] = [];
-            var keys = {};
-            FOLLOWUPS[mat].forEach(function(f) { keys[(f.created||'')+(f.date||'')+(f.atend||'')] = true; });
-            fus.forEach(function(fu) {
-              var k = (fu.created||'')+(fu.date||'')+(fu.atend||'');
-              if (!keys[k]) { FOLLOWUPS[mat].push(fu); novos++; }
+            fus.forEach(function(fuGAS) {
+              var uid = (fuGAS.created||'')+(fuGAS.date||'')+(fuGAS.atend||'');
+              var localIdx = -1;
+              FOLLOWUPS[mat].forEach(function(f, idx) {
+                if ((f.created||'')+(f.date||'')+(f.atend||'') === uid) localIdx = idx;
+              });
+              if (localIdx < 0) {
+                // Novo do GAS — adicionar
+                FOLLOWUPS[mat].push(fuGAS); novos++;
+              } else {
+                // Já existe — só atualizar se o local está concluído e o GAS não está
+                // (local prevalece para status done)
+                if (FOLLOWUPS[mat][localIdx].done && !fuGAS.done) {
+                  // Manter local (já concluído)
+                } else if (!FOLLOWUPS[mat][localIdx].done && fuGAS.done) {
+                  // GAS tem concluído — atualizar local
+                  FOLLOWUPS[mat][localIdx] = fuGAS; novos++;
+                }
+              }
             });
           });
           if (novos > 0) {
             totalNovos += novos;
             try { localStorage.setItem(BASE_CONFIG[ACTIVE_BASE].storageF, JSON.stringify(FOLLOWUPS)); } catch(e) {}
           }
+          // Sempre subir o estado local atual para o GAS (garante que done:true sobe)
+          gasCall('saveFollowup', { followups: FOLLOWUPS, base: ACTIVE_BASE }).catch(function(){});
         } else {
           var otherCfg = BASE_CONFIG[bk];
           var otherRaw = localStorage.getItem(otherCfg.storageF);
@@ -3736,17 +3771,25 @@ async function sincFuGAS() {
           Object.keys(result.data).forEach(function(mat) {
             var fus = result.data[mat];
             if (!otherFu[mat]) otherFu[mat] = [];
-            var keys = {};
-            otherFu[mat].forEach(function(f) { keys[(f.created||'')+(f.date||'')+(f.atend||'')] = true; });
-            fus.forEach(function(fu) {
-              var k = (fu.created||'')+(fu.date||'')+(fu.atend||'');
-              if (!keys[k]) { otherFu[mat].push(fu); novosOther++; }
+            fus.forEach(function(fuGAS) {
+              var uid = (fuGAS.created||'')+(fuGAS.date||'')+(fuGAS.atend||'');
+              var localIdx = -1;
+              otherFu[mat].forEach(function(f, idx) {
+                if ((f.created||'')+(f.date||'')+(f.atend||'') === uid) localIdx = idx;
+              });
+              if (localIdx < 0) {
+                otherFu[mat].push(fuGAS); novosOther++;
+              } else if (!otherFu[mat][localIdx].done && fuGAS.done) {
+                otherFu[mat][localIdx] = fuGAS; novosOther++;
+              }
             });
           });
           if (novosOther > 0) {
             totalNovos += novosOther;
             try { localStorage.setItem(otherCfg.storageF, JSON.stringify(otherFu)); } catch(e) {}
           }
+          // Subir estado local para o GAS
+          gasCall('saveFollowup', { followups: otherFu, base: bk }).catch(function(){});
         }
         return nextBase();
       });
@@ -4895,17 +4938,14 @@ function updateSendBar(msg) {
     btnWa.style.display = 'none';
   }
 
-  // Email — gerar .eml que abre no Outlook (não usa mailto para evitar Gmail)
+  // Email — mailto individual (abre no Outlook com conta @estacio.br)
   if (email) {
     var emailSubjModal = 'Estácio Volta Redonda — ' + (CURRENT_MOTIVO === 'financeiro' ? 'Pendência Financeira' : 'Acompanhamento Acadêmico');
-    btnEmail.removeAttribute('href');
+    var subj = encodeURIComponent(emailSubjModal);
+    var body = encodeURIComponent(msg);
+    btnEmail.href = 'mailto:' + email + '?subject=' + subj + '&body=' + body;
+    btnEmail.removeAttribute('onclick');
     btnEmail.style.display = '';
-    btnEmail.onclick = function(e) {
-      e.preventDefault();
-      var emlContent = gerarEML(email, emailSubjModal, msg);
-      downloadEML(emlContent, 'email-' + (CURRENT_MAT || 'aluno') + '.eml');
-      registrarEnvio('E-mail');
-    };
   } else {
     btnEmail.style.display = 'none';
   }
@@ -5610,42 +5650,29 @@ async function executarLote(canal) {
   // Para e-mail: abrir cliente de e-mail (Outlook/mailto) para cada destinatário
   // OU enviar via GAS se preferir
   if (canal === 'E-mail' && emailList.length > 0) {
-    // Gerar arquivo .eml para cada destinatário — abre direto no Outlook sem passar pelo browser
-    // Para lotes grandes, gerar um .eml com múltiplos destinatários em BCC
-    if (emailList.length === 1) {
-      // Um único destinatário — .eml individual
-      var em0 = emailList[0];
-      var emlContent = gerarEML(em0.email, em0.subj, em0.msg);
-      downloadEML(emlContent, 'email-' + em0.matricula + '.eml');
-    } else {
-      // Múltiplos destinatários — opção 1: um .eml por destinatário em zip-like download
-      // Opção 2 (mais prática): um .eml com todos em BCC + CSV como backup
-      var primeiroEmail = emailList[0];
-      var bccList = emailList.slice(1).map(function(e) { return e.email; }).join(', ');
-      var corpoLote = emailList.map(function(e, i) {
-        return (i+1) + '. ' + e.nome + ' (' + e.email + ')\n' + e.msg;
-      }).join('\n\n---\n\n');
-      var emlLote = gerarEML(
-        primeiroEmail.email,
-        primeiroEmail.subj + ' [' + emailList.length + ' destinatários]',
-        corpoLote,
-        bccList
-      );
-      downloadEML(emlLote, 'emails-lote-' + emailList.length + '-destinatarios.eml');
-
-      // Também gerar CSV como backup
-      var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
-        emailList.map(function(e) {
-          var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
-          return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
-        }).join('\n');
-      var csvBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
-      var csvUrl = URL.createObjectURL(csvBlob);
-      var csvLink = document.createElement('a');
-      csvLink.href = csvUrl;
-      csvLink.download = 'emails-lote-' + emailList.length + '.csv';
-      setTimeout(function() { csvLink.click(); URL.revokeObjectURL(csvUrl); }, 500);
-    }
+    // Abrir um mailto: individual por destinatário com delay
+    // O Outlook abrirá uma janela separada para cada e-mail
+    emailList.forEach(function(em, i) {
+      setTimeout(function() {
+        var subj = encodeURIComponent(em.subj);
+        var body = encodeURIComponent(em.msg);
+        var a = document.createElement('a');
+        a.href = 'mailto:' + em.email + '?subject=' + subj + '&body=' + body;
+        a.click();
+      }, i * 1500); // 1.5s entre cada abertura para não sobrecarregar
+    });
+    // CSV de backup com todos os dados
+    var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
+      emailList.map(function(e) {
+        var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
+        return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
+      }).join('\n');
+    var csvBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
+    var csvUrl = URL.createObjectURL(csvBlob);
+    var csvLink = document.createElement('a');
+    csvLink.href = csvUrl;
+    csvLink.download = 'emails-lote-' + emailList.length + '.csv';
+    setTimeout(function() { csvLink.click(); URL.revokeObjectURL(csvUrl); }, 500);
   }
 
   // Atualizar UI
@@ -5658,7 +5685,7 @@ async function executarLote(canal) {
   // Resultado
   var txt = '✅ ' + comSucesso.length + ' acionamentos registrados.';
   if (canal === 'WhatsApp') txt += ' CSV exportado com ' + rows.length + ' números.';
-  if (canal === 'E-mail')   txt += ' Arquivo .eml gerado com ' + emailList.length + ' destinatário(s) — abra no Outlook para enviar.';
+  if (canal === 'E-mail')   txt += ' ' + emailList.length + ' janela(s) de e-mail abrindo no Outlook. CSV de backup gerado.';
   if (semContato.length) txt += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
   resEl.className = 'lote-result ok';
   resEl.textContent = txt;
