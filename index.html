@@ -504,7 +504,8 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .logo-preview-wrap { display:none; text-align:center; margin-bottom:12px; }
 .logo-preview-wrap img { max-height:80px; max-width:200px; border-radius:8px; border:1px solid var(--border); }
 </style>
-  <link rel="manifest" href="manifest.json">
+  <!-- manifest só carrega via HTTPS (GitHub Pages / GAS) -->
+  <script>if(location.protocol==='https:'){var l=document.createElement('link');l.rel='manifest';l.href='manifest.json';document.head.appendChild(l);}</script>
   <meta name="theme-color" content="#3b5bdb">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -953,14 +954,28 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
           </div>
           <div>
             <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:5px">STATUS</label>
-            <select id="tf-status" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+            <select id="tf-status" onchange="document.getElementById('tf-obs-exec-wrap').style.display=this.value==='concluida'?'block':'none'" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px">
               <option value="pendente">Pendente</option>
               <option value="andamento">Em andamento</option>
               <option value="concluida">Concluída</option>
             </select>
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:5px">📅 DATA DE INÍCIO</label>
+            <input id="tf-inicio" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box">
+          </div>
+          <div id="tf-conclusao-wrap">
+            <label style="font-size:12px;font-weight:600;color:var(--green-text);display:block;margin-bottom:5px">✅ DATA DE CONCLUSÃO</label>
+            <input id="tf-conclusao" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box" readonly>
+          </div>
+        </div>
         <div id="tf-form-err" style="display:none;color:var(--red);font-size:12px;padding:8px 12px;background:var(--red-bg);border-radius:6px"></div>
+        <div id="tf-obs-exec-wrap" style="display:none">
+          <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:5px">✅ O QUE FOI EXECUTADO</label>
+          <textarea id="tf-obs-exec" rows="3" placeholder="Descreva o que foi feito, resultado obtido, encaminhamentos realizados..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        </div>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
         <button class="btn" onclick="fecharModalTarefa()">Cancelar</button>
@@ -1178,7 +1193,7 @@ async function gasCall(action, body={}) {
   if (!GAS_URL) return null;
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
+    const t = setTimeout(() => ctrl.abort(), 30000);
     const res = await fetch(GAS_URL, {
       method: 'POST', redirect: 'follow',
       headers: { 'Content-Type': 'text/plain' },
@@ -2011,6 +2026,21 @@ function abrirRenomearAtendente(idx) {
   renomearAtendente(nomeAtual, novoNome);
 }
 
+async function adminRenomearHistorico() {
+  var de   = document.getElementById('admin-rename-de').value.trim();
+  var para = document.getElementById('admin-rename-para').value.trim();
+  var resEl = document.getElementById('rename-hist-result');
+  if (!de)   { resEl.textContent = '⚠️ Selecione o nome atual.'; return; }
+  if (!para) { resEl.textContent = '⚠️ Selecione o novo nome.'; return; }
+  if (de === para) { resEl.textContent = '⚠️ Os nomes são iguais.'; return; }
+  if (!confirm('Renomear "' + de + '" → "' + para + '" em TODOS os acionamentos, follow-ups e tarefas?')) return;
+  resEl.textContent = '⏳ Renomeando...';
+  await renomearAtendente(de, para);
+  resEl.textContent = '✅ Renomeado com sucesso! Reabra o Admin para ver a lista atualizada.';
+  // Atualizar os selects
+  openAdmin();
+}
+
 async function renomearAtendente(nomeAntigo, novoNome) {
   showToast('⏳ Renomeando em todos os registros...');
   var count = 0;
@@ -2300,7 +2330,7 @@ async function saveAction() {
     try {
       const gr = await Promise.race([
         gasCall('saveAction', entry),
-        new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 8000); })
+        new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 30000); })
       ]);
       if (!gr || !gr.ok) console.warn('GAS saveAction falhou:', gr);
       gasCall('saveContact', contato).catch(function(){});
@@ -3286,18 +3316,25 @@ function openAdmin() {
   renderAtendentes();
   // Popular select de atendentes (para apagar por atendente)
   var sel = document.getElementById('admin-atend-sel');
+  // Coletar TODOS os nomes do histórico (inclui variações de grafia)
+  var allNames = new Set();
+  Object.keys(BASE_CONFIG).forEach(function(bk) {
+    var h = bk === ACTIVE_BASE ? HISTORY : {};
+    try { var raw = localStorage.getItem(BASE_CONFIG[bk].storageH); if (raw) h = JSON.parse(raw); } catch(e) {}
+    Object.values(h).forEach(function(arr) { arr.forEach(function(a) { if (a.atend) allNames.add(a.atend); }); });
+  });
+  var sortedNames = Array.from(allNames).sort();
   if (sel) {
-    var atends = new Set();
-    Object.keys(BASE_CONFIG).forEach(function(bk) {
-      var h = bk === ACTIVE_BASE ? HISTORY : {};
-      try { var raw = localStorage.getItem(BASE_CONFIG[bk].storageH); if (raw) h = JSON.parse(raw); } catch(e) {}
-      Object.values(h).forEach(function(arr) { arr.forEach(function(a) { if (a.atend) atends.add(a.atend); }); });
-    });
     sel.innerHTML = '<option value="">— selecionar atendente —</option>';
-    Array.from(atends).sort().forEach(function(a) {
-      sel.innerHTML += '<option value="' + a + '">' + a + '</option>';
-    });
+    sortedNames.forEach(function(a) { sel.innerHTML += '<option value="' + a + '">' + a + '</option>'; });
   }
+  // Popular select de renomear (De)
+  var renDe = document.getElementById('admin-rename-de');
+  if (renDe) {
+    renDe.innerHTML = '<option value="">— Nome atual (de) —</option>';
+    sortedNames.forEach(function(a) { renDe.innerHTML += '<option value="' + a + '">' + a + '</option>'; });
+  }
+  // admin-rename-para é um input de texto — não precisa popular
 }
 
 function closeAdmin() {
@@ -4129,6 +4166,14 @@ async function abrirModalTarefa(id) {
     document.getElementById('tf-prio').value = t.prio || 'normal';
     document.getElementById('tf-prazo').value = t.prazo || '';
     document.getElementById('tf-status').value = t.status || 'pendente';
+    var obsWrap = document.getElementById('tf-obs-exec-wrap');
+    var obsExec = document.getElementById('tf-obs-exec');
+    if (obsWrap) obsWrap.style.display = (t.status === 'concluida') ? 'block' : 'none';
+    if (obsExec) obsExec.value = t.obs_exec || '';
+    var inicioEl = document.getElementById('tf-inicio');
+    var conclusaoEl = document.getElementById('tf-conclusao');
+    if (inicioEl) inicioEl.value = t.inicio || '';
+    if (conclusaoEl) conclusaoEl.value = t.conclusao || '';
   } else {
     document.getElementById('modal-tarefa-titulo').textContent = '📋 Nova Tarefa';
     document.getElementById('tf-edit-id').value = '';
@@ -4138,6 +4183,15 @@ async function abrirModalTarefa(id) {
     document.getElementById('tf-prio').value = 'normal';
     document.getElementById('tf-prazo').value = '';
     document.getElementById('tf-status').value = 'pendente';
+    var obsWrapN = document.getElementById('tf-obs-exec-wrap');
+    var obsExecN = document.getElementById('tf-obs-exec');
+    if (obsWrapN) obsWrapN.style.display = 'none';
+    if (obsExecN) obsExecN.value = '';
+    // Data de início: hoje por padrão
+    var inicioElN = document.getElementById('tf-inicio');
+    var conclusaoElN = document.getElementById('tf-conclusao');
+    if (inicioElN) inicioElN.value = new Date().toISOString().slice(0,10);
+    if (conclusaoElN) conclusaoElN.value = '';
   }
 }
 
@@ -4158,9 +4212,12 @@ function salvarTarefa() {
       TAREFAS[idx] = Object.assign(TAREFAS[idx], {
         titulo: titulo,
         desc: document.getElementById('tf-desc').value.trim(),
+        obs_exec: document.getElementById('tf-obs-exec') ? document.getElementById('tf-obs-exec').value.trim() : '',
         atend: document.getElementById('tf-atend').value,
         prio: document.getElementById('tf-prio').value,
         prazo: document.getElementById('tf-prazo').value,
+        inicio: document.getElementById('tf-inicio') ? document.getElementById('tf-inicio').value : '',
+        conclusao: document.getElementById('tf-status').value === 'concluida' ? (TAREFAS.find(function(x){return x.id===editId;})||{}).conclusao || new Date().toISOString().slice(0,10) : '',
         status: document.getElementById('tf-status').value,
         updatedAt: now
       });
@@ -4170,6 +4227,12 @@ function salvarTarefa() {
       id: 'tf_' + Date.now(),
       titulo: titulo,
       desc: document.getElementById('tf-desc').value.trim(),
+      obs_exec: document.getElementById('tf-obs-exec') ? document.getElementById('tf-obs-exec').value.trim() : '',
+      atend: document.getElementById('tf-atend').value,
+      prio: document.getElementById('tf-prio').value,
+      prazo: document.getElementById('tf-prazo').value,
+      inicio: document.getElementById('tf-inicio') ? document.getElementById('tf-inicio').value : new Date().toISOString().slice(0,10),
+      conclusao: document.getElementById('tf-status') && document.getElementById('tf-status').value === 'concluida' ? new Date().toISOString().slice(0,10) : '',
       atend: document.getElementById('tf-atend').value,
       prio: document.getElementById('tf-prio').value,
       prazo: document.getElementById('tf-prazo').value,
@@ -4195,6 +4258,14 @@ function excluirTarefa(id) {
 function alterarStatusTarefa(id, status) {
   var t = TAREFAS.find(function(x) { return x.id === id; });
   if (!t) return;
+  if (status === 'concluida' && t.status !== 'concluida') {
+    var obs = prompt('✅ O que foi executado?\n\n(Opcional — deixe em branco para pular)', t.obs_exec || '');
+    if (obs !== null) t.obs_exec = obs.trim();
+    // Registrar data de conclusão automaticamente
+    t.conclusao = new Date().toISOString().slice(0,10);
+  } else if (status !== 'concluida') {
+    t.conclusao = '';
+  }
   t.status = status;
   t.updatedAt = new Date().toISOString();
   saveTarefas();
@@ -4257,6 +4328,7 @@ function renderTarefas() {
     '<th style="padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)">Atendente</th>' +
     '<th style="padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)">Prioridade</th>' +
     '<th style="padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)">Prazo</th>' +
+    '<th style="padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)">Início / Conclusão</th>' +
     '<th style="padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)">Status</th>' +
     '<th style="padding:10px 14px;border-bottom:1px solid var(--border)"></th>' +
     '</tr></thead><tbody>' +
@@ -4267,11 +4339,16 @@ function renderTarefas() {
         '<td style="padding:12px 14px;border-bottom:1px solid var(--border)">' +
           '<div style="font-weight:600;' + (t.status==='concluida'?'text-decoration:line-through;color:var(--text3)':'') + '">' + t.titulo + '</div>' +
           (t.desc ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">' + t.desc.slice(0,80) + (t.desc.length>80?'...':'') + '</div>' : '') +
+          (t.obs_exec ? '<div style="font-size:11px;color:var(--green-text);margin-top:3px;font-weight:600">✅ ' + t.obs_exec.slice(0,80) + (t.obs_exec.length>80?'...':'') + '</div>' : '') +
           (t.criadoPor ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">Criado por: ' + t.criadoPor + '</div>' : '') +
         '</td>' +
         '<td style="padding:12px 14px;border-bottom:1px solid var(--border);color:var(--text2)">' + (t.atend || '—') + '</td>' +
         '<td style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:' + (prioColor[t.prio]||'var(--text3)') + '">' + (prioLabel[t.prio]||'Normal') + '</td>' +
         '<td style="padding:12px 14px;border-bottom:1px solid var(--border);' + (atrasada?'color:#c92a2a;font-weight:600':'') + '">' + prazoFmt + (atrasada?' ⚠️':'') + '</td>' +
+        '<td style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3)">' +
+          (t.inicio ? '📅 ' + t.inicio.split('-').reverse().join('/') : '—') +
+          (t.conclusao ? '<br>✅ ' + t.conclusao.split('-').reverse().join('/') : '') +
+        '</td>' +
         '<td style="padding:12px 14px;border-bottom:1px solid var(--border)">' +
           '<select onchange="alterarStatusTarefa(\'' + t.id + '\',this.value)" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;color:' + (statusColor[t.status]||'inherit') + ';font-weight:600">' +
             ['pendente','andamento','concluida'].map(function(s) {
@@ -6092,6 +6169,19 @@ function importarEventos(input) {
       <div class="atend-list" id="atend-list"></div>
       <div id="atend-result" style="font-size:12px;margin-top:6px"></div>
 
+      <!-- Renomear por histórico -->
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">✏️ Renomear no histórico</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Corrige nomes duplicados (ex: MARCELA → Marcela) em todos os acionamentos.</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <select id="admin-rename-de" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
+          <option value="">— Nome atual (de) —</option>
+        </select>
+        <span style="font-size:13px">→</span>
+        <input id="admin-rename-para" type="text" placeholder="Novo nome" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+        <button class="btn btn-sm btn-primary" onclick="adminRenomearHistorico()">✏️ Renomear</button>
+      </div>
+      <div id="rename-hist-result" style="font-size:12px;color:var(--text3)"></div>
+
       <!-- Por atendente -->
       <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por atendente</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -6241,5 +6331,33 @@ function importarEventos(input) {
     </div>
   </div>
 
+
+<div class="logo-modal" id="logo-modal" style="display:none" onclick="if(event.target===this)fecharLogoModal()">
+    <div class="logo-modal-box">
+      <h3>🎨 Personalizar Logo e Nome</h3>
+      <div class="ev-field">
+        <label>Nome do sistema</label>
+        <input type="text" id="logo-nome-input" placeholder="CRM Alunos · Volta Redonda" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+      </div>
+      <div class="ev-field">
+        <label>Logo (imagem)</label>
+        <div class="logo-drop" onclick="document.getElementById('logo-file-input').click()">
+          <div style="font-size:32px;margin-bottom:8px">🖼️</div>
+          <div style="font-size:13px;color:var(--text2)">Clique para selecionar</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">PNG, JPG ou SVG — recomendado 64×64px</div>
+          <input type="file" id="logo-file-input" accept="image/*" onchange="previewLogo(this)">
+        </div>
+        <div class="logo-preview-wrap" id="logo-preview-wrap">
+          <img id="logo-preview-img" src="" alt="Preview">
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">Preview do logo</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-sm" onclick="removerLogoCustom()" style="color:#c92a2a;border-color:#ffc9c9">🗑️ Remover logo</button>
+        <button class="btn" onclick="fecharLogoModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarLogoCustom()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
