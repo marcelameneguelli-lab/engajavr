@@ -643,6 +643,14 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
           <option value="N">Não</option>
         </select>
       </div>
+      <div class="filter-group">
+        <label>🔒 Trancamento</label>
+        <select id="f-trancamento" onchange="applyFilters()">
+          <option value="">Todos</option>
+          <option value="sim">Sinalizou trancamento</option>
+          <option value="nao">Sem sinalização</option>
+        </select>
+      </div>
       <button class="btn btn-sm" onclick="clearFilters()">Limpar</button>
       <button class="btn btn-sm" onclick="exportFilteredCSV()" title="Baixar alunos filtrados para disparo" style="border-color:var(--accent);color:var(--accent-text);background:var(--accent-bg)">📤 Exportar filtro</button>
       <button class="btn btn-sm btn-primary" onclick="abrirLoteFiltro()" title="Disparar para todos os alunos filtrados">📨 Disparar em lote</button>
@@ -670,6 +678,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
           <th>Propensão Evasão</th>
           <th>Criticidade SE</th>
           <th>Formando</th>
+          <th>🔒 Tranc.</th>
           <th>NPS</th>
           <th>Acionamento</th>
           <th></th>
@@ -756,6 +765,14 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </div>
         <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleFileSelect(event)">
         <div id="import-result"></div>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <button class="btn btn-sm btn-primary" onclick="publicarBaseGAS()" id="btn-publicar-base" style="width:100%">📤 Publicar esta base para toda a equipe</button>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">Depois de importar, clique aqui para que todos os atendentes recebam a mesma base automaticamente — sem precisar importar individualmente.</div>
+        </div>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <button class="btn btn-sm" onclick="buscarBasePublicada()" id="btn-buscar-base" style="width:100%">📥 Buscar base publicada pela coordenação</button>
+          <div id="buscar-base-result" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+        </div>
       </div>
       <div class="chart-card" style="max-width:600px;margin-bottom:16px">
         <h3>🔗 Conexão Google Sheets (Tempo Real)</h3>
@@ -1090,6 +1107,10 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         <div class="send-status" id="send-status"></div>
       </div>
       <div class="field"><label>Observações do atendimento <span style="color:#e03131">*</span></label><textarea id="m-obs" placeholder="Registre o resultado do contato: promessa de pagamento, data combinada, situação relatada pelo aluno, encaminhamentos..."></textarea></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0">
+        <input type="checkbox" id="m-trancamento" style="width:16px;height:16px;cursor:pointer">
+        <label for="m-trancamento" style="cursor:pointer;font-size:13px;color:var(--red);font-weight:600">🔒 Aluno sinalizou intenção de trancamento</label>
+      </div>
 
       <div class="section-title">📅 Agendar Follow-up (opcional)</div>
       <div class="fu-form">
@@ -1258,21 +1279,27 @@ async function syncFromRemote() {
         changed = true;
       }
     }
-    // Base de alunos: cada atendente importa localmente via CSV
-    // GAS sincroniza apenas history, contacts e followups
-    // Sync follow-ups
+    // Sync follow-ups — merge respeitando status done local
     const frSync = await gasCall('getFollowups', { base: ACTIVE_BASE });
     if (frSync && frSync.ok && frSync.data) {
-      let novos = 0;
+      let changed2 = false;
       Object.entries(frSync.data).forEach(([mat, fus]) => {
         if (!FOLLOWUPS[mat]) FOLLOWUPS[mat] = [];
-        const keys = new Set(FOLLOWUPS[mat].map(f => (f.created||'')+(f.date||'')+(f.atend||'')));
-        fus.forEach(fu => {
-          const k = (fu.created||'')+(fu.date||'')+(fu.atend||'');
-          if (!keys.has(k)) { FOLLOWUPS[mat].push(fu); novos++; }
+        fus.forEach(fuGAS => {
+          const uid = (fuGAS.created||'')+(fuGAS.date||'')+(fuGAS.atend||'');
+          const localIdx = FOLLOWUPS[mat].findIndex(f => (f.created||'')+(f.date||'')+(f.atend||'') === uid);
+          if (localIdx < 0) {
+            // Novo do GAS — adicionar
+            FOLLOWUPS[mat].push(fuGAS); changed2 = true;
+          } else if (FOLLOWUPS[mat][localIdx].done && !fuGAS.done) {
+            // Local concluído, GAS não — manter local (não fazer nada)
+          } else if (!FOLLOWUPS[mat][localIdx].done && fuGAS.done) {
+            // GAS concluído, local não — atualizar local
+            FOLLOWUPS[mat][localIdx] = fuGAS; changed2 = true;
+          }
         });
       });
-      if (novos > 0) {
+      if (changed2) {
         await STORE.set(BASE_CONFIG[ACTIVE_BASE].storageF, FOLLOWUPS);
         try { localStorage.setItem(BASE_CONFIG[ACTIVE_BASE].storageF, JSON.stringify(FOLLOWUPS)); } catch(e) {}
         changed = true;
@@ -1331,17 +1358,31 @@ async function saveDB(db, key) {
   const k = key || BASE_CONFIG[ACTIVE_BASE].storageDB;
   _memStore[k] = db;
   const json = JSON.stringify(db);
-  // 1. Tentar localStorage
-  var lsSaved = false;
+
+  // 1. Tentar localStorage normal
   try {
     localStorage.setItem(k, json);
     localStorage.setItem(k + '_v', DB_VER);
     if (k === 'crm_db') localStorage.removeItem('crm_db_z');
-    var check = localStorage.getItem(k);
-    if (check && check.length > 10) lsSaved = true;
+    // Verificar se realmente salvou
+    const check = localStorage.getItem(k);
+    if (check && check.length > 10) return true;
   } catch(e) {}
-  if (lsSaved) return true;
-  // 2. Fallback: IndexedDB (sem limite de tamanho)
+
+  // 2. Fallback: salvar em chunks no localStorage (divide em partes de 1MB)
+  try {
+    const CHUNK = 1000000; // 1MB por chunk
+    const chunks = Math.ceil(json.length / CHUNK);
+    localStorage.setItem(k + '_chunks', String(chunks));
+    for (let ci = 0; ci < chunks; ci++) {
+      localStorage.setItem(k + '_c' + ci, json.slice(ci * CHUNK, (ci + 1) * CHUNK));
+    }
+    localStorage.setItem(k + '_v', DB_VER);
+    console.log('[saveDB] chunks localStorage:', k, chunks, 'chunks,', Math.round(json.length/1024), 'KB');
+    return true;
+  } catch(e) {}
+
+  // 3. Fallback final: IndexedDB
   try {
     await idbSet(k, json);
     await idbSet(k + '_v', DB_VER);
@@ -1357,7 +1398,7 @@ async function saveDB(db, key) {
 async function loadDB(key) {
   const k = key || BASE_CONFIG[ACTIVE_BASE].storageDB;
   if (_memStore[k] && Array.isArray(_memStore[k]) && _memStore[k].length > 0) return _memStore[k];
-  // 1. localStorage
+  // 1. localStorage normal
   try {
     const raw = localStorage.getItem(k);
     if (raw && raw !== 'null' && raw !== '[]' && raw.length > 10) {
@@ -1368,7 +1409,22 @@ async function loadDB(key) {
       }
     }
   } catch(e) { console.warn('[loadDB] localStorage erro:', k, e); }
-  // 2. IndexedDB
+  // 2. localStorage em chunks
+  try {
+    const nChunks = parseInt(localStorage.getItem(k + '_chunks') || '0');
+    if (nChunks > 0) {
+      let json = '';
+      for (let ci = 0; ci < nChunks; ci++) json += localStorage.getItem(k + '_c' + ci) || '';
+      if (json.length > 10) {
+        const db = JSON.parse(json);
+        if (db && Array.isArray(db) && db.length > 0) {
+          console.log('[loadDB] chunks:', k, db.length, 'registros');
+          _memStore[k] = db; return db;
+        }
+      }
+    }
+  } catch(e) {}
+  // 3. IndexedDB
   try {
     const raw2 = await idbGet(k);
     if (raw2 && raw2.length > 10) {
@@ -1376,13 +1432,12 @@ async function loadDB(key) {
       if (db2 && Array.isArray(db2) && db2.length > 0) {
         console.log('[loadDB] IndexedDB:', k, db2.length, 'registros');
         _memStore[k] = db2;
-        // Tentar copiar para localStorage para acesso mais rápido
         try { localStorage.setItem(k, raw2); localStorage.setItem(k+'_v', DB_VER); } catch(e) {}
         return db2;
       }
     }
   } catch(e) { console.warn('[loadDB] IndexedDB erro:', k, e); }
-  // 3. Legacy comprimido
+  // 4. Legacy comprimido
   if (k === 'crm_db') {
     try {
       const z = localStorage.getItem('crm_db_z');
@@ -1392,7 +1447,7 @@ async function loadDB(key) {
       }
     } catch(e) {}
   }
-  console.warn('[loadDB] base não encontrada em nenhuma fonte:', k);
+  console.warn('[loadDB] base não encontrada:', k);
   return null;
 }
 
@@ -1606,6 +1661,7 @@ function applyFilters() {
   const sit = document.getElementById('f-sit').value;
   const acion = document.getElementById('f-acion').value;
   const formando = document.getElementById('f-formando') ? document.getElementById('f-formando').value : '';
+  const trancamento = document.getElementById('f-trancamento') ? document.getElementById('f-trancamento').value : '';
 
   FILTERED = DB.filter(r => {
     if (ACTIVE_PRIO && getPrio(r) !== ACTIVE_PRIO) return false;
@@ -1628,6 +1684,13 @@ function applyFilters() {
       if (formando === 'S' && !isSim) return false;
       if (formando === 'N' && !isNao) return false;
     }
+    // Filtro trancamento: baseado em flag salvo no CONTACTS
+    if (trancamento) {
+      const ct = CONTACTS[r.COD_MATRICULA] || {};
+      const flagTranc = ct.trancamento === true || ct.trancamento === 'true';
+      if (trancamento === 'sim' && !flagTranc) return false;
+      if (trancamento === 'nao' && flagTranc) return false;
+    }
     return true;
   });
 
@@ -1638,7 +1701,7 @@ function applyFilters() {
 
 function clearFilters() {
   setPrio('');
-  ['f-search','f-periodo','f-tipo-curso','f-safra','f-mod','f-fin','f-prop','f-sit','f-acion','f-formando'].forEach(id => {
+  ['f-search','f-periodo','f-tipo-curso','f-safra','f-mod','f-fin','f-prop','f-sit','f-acion','f-formando','f-trancamento'].forEach(id => {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.value = ''; else el.value = '';
   });
@@ -1671,6 +1734,7 @@ function renderTable() {
         <td>${propBadge(r.PROPENSAO_EVASAO)}</td>
         <td>${critSEBadge(r['CRITICIDADE SE'])}</td>
         <td>${formandoBadge(r.IND_FORMANDO)}</td>
+        <td>${(CONTACTS[r.COD_MATRICULA] && CONTACTS[r.COD_MATRICULA].trancamento) ? '<span class="badge badge-red" style="font-size:10px">🔒 Tranc.</span>' : '<span style="color:var(--text3)">—</span>'}</td>
         <td>${npsBadge(r.COD_MATRICULA)}</td>
         <td>${acionBadge(r.COD_MATRICULA)}</td>
         <td><button class="btn btn-primary btn-sm" onclick="openModal('${r.COD_MATRICULA}')">Acionar</button></td>
@@ -1766,6 +1830,7 @@ function openModal(mat) {
     ['Propensão Evasão', propBadge(r.PROPENSAO_EVASAO)],
     ['Criticidade SE', critSEBadge(r['CRITICIDADE SE'])],
     ['Formando', formandoBadge(r.IND_FORMANDO)],
+    ['Trancamento', (CONTACTS[mat] && CONTACTS[mat].trancamento) ? '<span class="badge badge-red">🔒 Sinalizou trancamento</span>' : '—'],
     ['Situação', r.NOM_SITUACAO_ALUNO],
     ['Dias s/ acesso', r.QTD_DIAS_ULTIMO_ACESSO ? r.QTD_DIAS_ULTIMO_ACESSO + ' dias' : '—'],
     ['Indício Evasão', r.INDICIO_EVASAO || '—'],
@@ -1782,6 +1847,8 @@ function openModal(mat) {
   if (document.getElementById('m-fu-motivo')) document.getElementById('m-fu-motivo').value = '';
   if (document.getElementById('m-fu-obs'))    document.getElementById('m-fu-obs').value = '';
   document.getElementById('m-obs').value = '';
+  const trancEl2 = document.getElementById('m-trancamento');
+  if (trancEl2) trancEl2.checked = !!(CONTACTS[mat] && CONTACTS[mat].trancamento);
   var _erroEl = document.getElementById('modal-erro');
   if (_erroEl) _erroEl.style.display = 'none';
   populateAtendSelects();
@@ -2310,7 +2377,9 @@ async function saveAction() {
   const cel = document.getElementById('m-cel').value.trim();
   const fone = document.getElementById('m-fone').value.trim();
   const email = document.getElementById('m-email').value.trim();
-  CONTACTS[CURRENT_MAT] = { cel, fone, email };
+  const trancEl = document.getElementById('m-trancamento');
+  const trancamento = trancEl ? trancEl.checked : false;
+  CONTACTS[CURRENT_MAT] = { cel, fone, email, trancamento };
 
   if (!HISTORY[CURRENT_MAT]) HISTORY[CURRENT_MAT] = [];
   const now = new Date();
@@ -2319,6 +2388,7 @@ async function saveAction() {
   const nps_tipo = nps !== '' ? (nps >= 9 ? 'promotor' : nps >= 7 ? 'passivo' : 'detrator') : '';
   const _r0 = DB.find(x => x.COD_MATRICULA === CURRENT_MAT) || {};
   const entry = {
+    id: 'ac_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
     datetime: now.toLocaleString('pt-BR'),
     date: now.toLocaleDateString('pt-BR'),
     atend,
@@ -2862,6 +2932,77 @@ function clearProdFilter() {
 
 // ========== IMPORTAR ==========
 function handleFileSelect(e) { if (e.target.files[0]) processFile(e.target.files[0]); }
+
+async function publicarBaseGAS() {
+  if (!GAS_URL) { showToast('⚠️ Configure a URL do GAS primeiro.'); return; }
+  if (!DB.length) { showToast('⚠️ Nenhuma base carregada para publicar.'); return; }
+  if (!confirm('Publicar a base atual (' + DB.length.toLocaleString('pt-BR') + ' alunos) para TODA a equipe?\n\nIsso substituirá a base que os outros atendentes recebem ao buscar.')) return;
+
+  var btn = document.getElementById('btn-publicar-base');
+  btn.disabled = true;
+  btn.textContent = '⏳ Publicando...';
+
+  try {
+    var ident = document.getElementById('import-sem-label') ? document.getElementById('import-sem-label').value : '';
+    var atend = localStorage.getItem('crm_last_atend') || 'Admin';
+    var r = await gasCall('publicarBase', {
+      db: DB,
+      base: ACTIVE_BASE,
+      identificacao: ident,
+      publicadoPor: atend
+    });
+    if (r && r.ok) {
+      showToast('✅ Base publicada! ' + r.totalAlunos.toLocaleString('pt-BR') + ' alunos disponíveis para a equipe.');
+    } else {
+      showToast('❌ Erro ao publicar: ' + (r && r.error ? r.error : 'desconhecido'));
+    }
+  } catch(e) {
+    showToast('❌ Erro: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '📤 Publicar esta base para toda a equipe';
+}
+
+async function buscarBasePublicada() {
+  if (!GAS_URL) { showToast('⚠️ Configure a URL do GAS primeiro.'); return; }
+  var resEl = document.getElementById('buscar-base-result');
+  var btn = document.getElementById('btn-buscar-base');
+  btn.disabled = true;
+  resEl.textContent = '⏳ Buscando base publicada...';
+
+  try {
+    var r = await gasCall('getBasePublicada', { base: ACTIVE_BASE });
+    if (!r || !r.ok) {
+      resEl.textContent = '⚠️ ' + (r && r.error ? r.error : 'Nenhuma base publicada ainda para esta base.');
+      btn.disabled = false;
+      return;
+    }
+    var obj = r.data;
+    if (!confirm('Carregar base publicada por ' + (obj.publicadoPor || 'coordenação') + '?\n\n' +
+                 'Total: ' + obj.totalAlunos.toLocaleString('pt-BR') + ' alunos\n' +
+                 'Identificação: ' + (obj.identificacao || '—') + '\n' +
+                 'Publicado em: ' + new Date(obj.publicadoEm).toLocaleString('pt-BR') + '\n\n' +
+                 'Isso substituirá a base local, mas o histórico de acionamentos será preservado.')) {
+      btn.disabled = false;
+      resEl.textContent = '';
+      return;
+    }
+
+    DB = obj.db;
+    await saveDB(DB, BASE_CONFIG[ACTIVE_BASE].storageDB);
+    FILTERED = DB.slice();
+    renderTable();
+    renderDashboard();
+    updatePriorityCounts();
+    updateTopCount();
+
+    resEl.textContent = '✅ Base carregada — ' + obj.totalAlunos.toLocaleString('pt-BR') + ' alunos (' + (obj.identificacao || '') + ')';
+    showToast('✅ Base sincronizada com sucesso!');
+  } catch(e) {
+    resEl.textContent = '❌ Erro: ' + e.message;
+  }
+  btn.disabled = false;
+}
 
 function handleDrop(e) { e.preventDefault(); document.getElementById('drop-area').classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f && f.name.endsWith('.csv')) processFile(f); }
 
