@@ -1253,23 +1253,56 @@ async function syncFromRemote() {
       }
     }
     if (hr && hr.ok && hr.data) {
-      // Mesclar com histórico local (não substituir — preservar acionamentos locais)
+      // GAS é a fonte de verdade — reconstruir HISTORY da base ativa a partir dele,
+      // mas preservando acionamentos criados localmente que ainda não foram confirmados no GAS
       let mergeChanged = false;
-      Object.entries(hr.data).forEach(([mat, entries]) => {
-        if (!HISTORY[mat]) { HISTORY[mat] = entries; mergeChanged = true; }
-        else {
-          const existIds = new Set(HISTORY[mat].map(a => a.id || (a.datetime+a.atend)));
-          entries.forEach(a => {
-            const k = a.id || (a.datetime+a.atend);
-            if (!existIds.has(k)) { HISTORY[mat].push(a); mergeChanged = true; }
-          });
-        }
+      const localOnlyByMat = {};
+      // Guardar entradas locais que têm menos de 30s (podem não ter chegado ao GAS ainda)
+      const now = Date.now();
+      Object.entries(HISTORY).forEach(([mat, entries]) => {
+        entries.forEach(a => {
+          if (a.id) {
+            const ts = parseInt((a.id.match(/ac_(\d+)_/) || [])[1] || '0');
+            if (ts && (now - ts) < 30000) {
+              if (!localOnlyByMat[mat]) localOnlyByMat[mat] = [];
+              localOnlyByMat[mat].push(a);
+            }
+          }
+        });
       });
+
+      // Reconstruir HISTORY a partir do GAS (deduplicado por id no próprio merge)
+      const novoHistory = {};
+      Object.entries(hr.data).forEach(([mat, entries]) => {
+        const seen = new Set();
+        novoHistory[mat] = [];
+        entries.forEach(a => {
+          const k = a.id || ((a.datetime||'') + '|' + (a.atend||''));
+          if (!seen.has(k)) { seen.add(k); novoHistory[mat].push(a); }
+        });
+      });
+
+      // Reinjetar entradas locais recentes que talvez ainda não tenham sido salvas no GAS
+      Object.entries(localOnlyByMat).forEach(([mat, entries]) => {
+        if (!novoHistory[mat]) novoHistory[mat] = [];
+        entries.forEach(a => {
+          const exists = novoHistory[mat].some(x => x.id === a.id);
+          if (!exists) novoHistory[mat].push(a);
+        });
+      });
+
+      // Comparar se mudou (tamanho diferente é suficiente como heurística rápida)
+      const oldCount = Object.values(HISTORY).reduce((s,h)=>s+h.length,0);
+      const newCount = Object.values(novoHistory).reduce((s,h)=>s+h.length,0);
+      if (oldCount !== newCount || JSON.stringify(Object.keys(HISTORY).sort()) !== JSON.stringify(Object.keys(novoHistory).sort())) {
+        mergeChanged = true;
+      }
+      HISTORY = novoHistory;
       if (mergeChanged) {
         const _cfg2 = BASE_CONFIG[ACTIVE_BASE];
-      await STORE.set(_cfg2.storageH, HISTORY);
-      try { localStorage.setItem(_cfg2.storageH, JSON.stringify(HISTORY)); } catch(e) {}
-      changed = true;
+        await STORE.set(_cfg2.storageH, HISTORY);
+        try { localStorage.setItem(_cfg2.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+        changed = true;
       }
     }
     if (cr && cr.ok) {
