@@ -441,6 +441,21 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .lote-mala-msg-label span{font-size:10px;font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0}
 .lote-mala-msg-textarea{width:100%;min-height:90px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);background:var(--surface);resize:vertical;font-family:inherit;line-height:1.5;margin-bottom:8px}
 .lote-mala-msg-textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
+/* Editor de template e-mail (pré-disparo) */
+.lote-email-editor{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-top:10px}
+.lote-email-editor.ativo{display:block}
+.lote-email-editor-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.lote-email-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.lote-email-chip{display:inline-flex;align-items:center;padding:3px 8px;border-radius:99px;background:var(--accent-bg);color:var(--accent-text);font-size:11px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:all .1s;user-select:none}
+.lote-email-chip:hover{background:var(--accent);color:#fff}
+.lote-email-chip.active-field{background:var(--accent);color:#fff;border-color:var(--accent)}
+.lote-email-subj-input{width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);margin-bottom:8px;color:var(--text)}
+.lote-email-subj-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
+.lote-email-textarea{width:100%;min-height:110px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);background:var(--surface);resize:vertical;font-family:inherit;line-height:1.6;margin-bottom:8px}
+.lote-email-textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
+.lote-email-preview-box{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap;max-height:120px;overflow-y:auto;margin-bottom:4px}
+.lote-email-preview-label{font-size:10px;color:var(--text3);margin-bottom:4px}
+.lote-email-count{font-size:11px;color:var(--text3);margin-top:4px}
 
 /* ====== CALENDÁRIO ACADÊMICO — GRADE MENSAL ====== */
 .cal-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
@@ -5710,26 +5725,113 @@ function fecharLote() {
   var malaPanel = document.getElementById('lote-mala-panel');
   var footerNormal = document.getElementById('lote-footer-normal');
   var resEl = document.getElementById('lote-result');
+  var emailEditor = document.getElementById('lote-email-editor');
   if (malaPanel) malaPanel.classList.remove('ativo');
   if (footerNormal) footerNormal.style.display = '';
   if (resEl) { resEl.style.display = ''; resEl.textContent = ''; resEl.className = 'lote-result'; }
+  if (emailEditor) emailEditor.classList.remove('ativo');
+  // Limpar campos do editor de e-mail para próxima abertura
+  var msgEl  = document.getElementById('lote-email-msg');
+  var subjEl = document.getElementById('lote-email-subj');
+  var prevEl = document.getElementById('lote-email-preview');
+  var cntEl  = document.getElementById('lote-email-count');
+  if (msgEl)  msgEl.value  = '';
+  if (subjEl) subjEl.value = '';
+  if (prevEl) prevEl.textContent = '—';
+  if (cntEl)  cntEl.textContent  = '';
   _LOTE_EMAIL_LIST = []; _LOTE_ENTRIES_PENDENTES = []; _LOTE_XLSX_BLOB = null;
+}
+
+// Substituir variáveis do template por valores reais do aluno
+function substituirVarsEmail(template, r, atend) {
+  var nome = cap(r.NOM_ALUNO).split(' ')[0];
+  var nomecompleto = cap(r.NOM_ALUNO);
+  var curso = cap(r.NOM_CURSO);
+  var matricula = r.COD_MATRICULA || '';
+  var divida = fmtVal(r.VAL_DIVIDA);
+  var prazo = r.DAT_LIMITE_RENOVACAO || r.DATA_VENCIMENTO || '';
+  return (template || '')
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{nomecompleto\}/gi, nomecompleto)
+    .replace(/\{curso\}/gi, curso)
+    .replace(/\{matricula\}/gi, matricula)
+    .replace(/\{divida\}/gi, divida)
+    .replace(/\{valor\}/gi, divida)
+    .replace(/\{prazo\}/gi, prazo)
+    .replace(/\{atendente\}/gi, atend || '');
+}
+
+// Inserir chip de variável no campo ativo
+function inserirVarLote(campo, variavel) {
+  var id = campo === 'subj' ? 'lote-email-subj' : 'lote-email-msg';
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.focus();
+  var start = el.selectionStart, end = el.selectionEnd;
+  el.value = el.value.substring(0, start) + variavel + el.value.substring(end);
+  el.selectionStart = el.selectionEnd = start + variavel.length;
+  atualizarPreviewEmailLote();
+}
+
+// Prévia em tempo real
+function atualizarPreviewEmailLote() {
+  var previewEl = document.getElementById('lote-email-preview');
+  var countEl   = document.getElementById('lote-email-count');
+  var msgTpl    = (document.getElementById('lote-email-msg')  || {}).value || '';
+  var subjTpl   = (document.getElementById('lote-email-subj') || {}).value || '';
+  if (!previewEl || !LOTE_ALUNOS.length) return;
+  var atend = (document.getElementById('lote-atend') || {}).value || '';
+  var r = LOTE_ALUNOS[0];
+  var subjPrevia = substituirVarsEmail(subjTpl, r, atend);
+  var msgPrevia  = substituirVarsEmail(msgTpl,  r, atend);
+  previewEl.textContent = (subjPrevia ? 'Assunto: ' + subjPrevia + '\n\n' : '') + msgPrevia;
+  if (countEl) {
+    var semEmail = LOTE_ALUNOS.filter(function(a) {
+      var c = CONTACTS[a.COD_MATRICULA] || {};
+      return !(c.email || a.END_EMAIL);
+    }).length;
+    countEl.textContent = (LOTE_ALUNOS.length - semEmail) + ' vão receber · ' + semEmail + ' sem e-mail';
+  }
 }
 
 function atualizarPreviewLote() {
   var motivo = document.getElementById('lote-motivo').value;
   var canal  = document.getElementById('lote-canal').value;
   var btnWa  = document.getElementById('lote-btn-wa');
-  var btnEmail = document.getElementById('lote-btn-email');
+  var btnEmail  = document.getElementById('lote-btn-email');
   var wrap   = document.getElementById('lote-preview-wrap');
   var prev   = document.getElementById('lote-preview');
+  var emailEditor = document.getElementById('lote-email-editor');
 
   btnWa.style.display    = (canal === 'WhatsApp' && motivo) ? '' : 'none';
   btnEmail.style.display = (canal === 'E-mail'   && motivo) ? '' : 'none';
 
+  // Mostrar/esconder editor de e-mail
+  if (emailEditor) emailEditor.classList.toggle('ativo', canal === 'E-mail');
+
+  // Preencher template padrão da primeira vez
+  if (canal === 'E-mail' && motivo && LOTE_ALUNOS.length > 0) {
+    var msgEl  = document.getElementById('lote-email-msg');
+    var subjEl = document.getElementById('lote-email-subj');
+    if (msgEl && !msgEl.value.trim()) {
+      var msgPadrao = buildMessage(LOTE_ALUNOS[0], motivo, canal) || '';
+      if (msgPadrao.startsWith('Assunto:')) {
+        var lines = msgPadrao.split('\n');
+        if (subjEl) subjEl.value = lines[0].replace('Assunto:', '').trim();
+        msgEl.value = lines.slice(1).join('\n').trim();
+      } else {
+        if (subjEl) subjEl.value = '[Estácio] ' + (motivo === 'financeiro' ? 'Pendência Financeira — {curso}' : 'Acompanhamento Acadêmico — {curso}');
+        msgEl.value = msgPadrao;
+      }
+      atualizarPreviewEmailLote();
+    }
+    wrap.style.display = 'none';
+    return;
+  }
+
   if (motivo && canal && LOTE_ALUNOS.length > 0) {
-    var msg = buildMessage(LOTE_ALUNOS[0], motivo, canal);
-    if (msg) { prev.textContent = msg; wrap.style.display = ''; }
+    var msg2 = buildMessage(LOTE_ALUNOS[0], motivo, canal);
+    if (msg2) { prev.textContent = msg2; wrap.style.display = ''; }
     else { wrap.style.display = 'none'; }
   } else {
     wrap.style.display = 'none';
@@ -5768,24 +5870,32 @@ async function executarLote(canal) {
   var emailList = [];
   var loteEntries = [];
 
+  // Capturar template editado pelo usuário (para E-mail)
+  var _emailMsgTpl  = (document.getElementById('lote-email-msg')  || {}).value || '';
+  var _emailSubjTpl = (document.getElementById('lote-email-subj') || {}).value || '';
+
   for (var i = 0; i < LOTE_ALUNOS.length; i++) {
     var r = LOTE_ALUNOS[i];
     var c = CONTACTS[r.COD_MATRICULA] || {};
     var tel   = (c.cel   || r.NUM_TELEF_CELULAR || '').replace(/\D/g,'');
     var email = c.email  || r.END_EMAIL || '';
-    var msg   = buildMessage(r, motivo, canal) || '';
+
+    // Para e-mail: usar template editado; para WhatsApp: usar buildMessage
+    var msg = '';
+    if (canal === 'E-mail' && _emailMsgTpl) {
+      msg = substituirVarsEmail(_emailMsgTpl, r, atend);
+    } else {
+      msg = buildMessage(r, motivo, canal) || '';
+    }
 
     if (canal === 'WhatsApp' && !tel)   { semContato.push(r.NOM_ALUNO); continue; }
     if (canal === 'E-mail'   && !email) { semContato.push(r.NOM_ALUNO); continue; }
     if (!msg) { semMsg.push(r.NOM_ALUNO); continue; }
 
-    var emailSubj = '[Estácio] ' + (motivo === 'financeiro' ? 'Pendência Financeira — {curso}' : 'Acompanhamento Acadêmico — {curso}');
+    var emailSubj = _emailSubjTpl
+      ? substituirVarsEmail(_emailSubjTpl, r, atend)
+      : ('[Estácio] ' + (motivo === 'financeiro' ? 'Pendência Financeira — ' + cap(r.NOM_CURSO) : 'Acompanhamento Acadêmico — ' + cap(r.NOM_CURSO)));
     var emailBody = msg;
-    if (msg.startsWith('Assunto:')) {
-      var lines = msg.split('\n');
-      emailSubj = lines[0].replace('Assunto:', '').trim();
-      emailBody = lines.slice(1).join('\n').trim();
-    }
 
     if (!HISTORY[r.COD_MATRICULA]) HISTORY[r.COD_MATRICULA] = [];
     var entry = {
@@ -5925,13 +6035,7 @@ function gerarXlsxMalaDireta(emailList) {
 
 function baixarMalaDiretoNovamente() {
   if (!_LOTE_EMAIL_LIST.length) return;
-  // Aplicar mensagem editada se o usuário alterou o textarea
-  var msgEditEl = document.getElementById('lote-mala-msg-edit');
-  var msgEditada = msgEditEl ? msgEditEl.value.trim() : '';
-  var listaAtualizada = _LOTE_EMAIL_LIST.map(function(e) {
-    return msgEditada ? Object.assign({}, e, { msg: msgEditada }) : e;
-  });
-  if (msgEditada) _LOTE_EMAIL_LIST = listaAtualizada;
+  var listaAtualizada = _LOTE_EMAIL_LIST;
   var xlsxResult = gerarXlsxMalaDireta(listaAtualizada);
   _LOTE_XLSX_BLOB = xlsxResult;
   var hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
@@ -6629,6 +6733,28 @@ function importarEventos(input) {
           <label>Observação (opcional)</label>
           <input type="text" id="lote-obs" placeholder="Ex: Disparo em lote — campanha maio/2026">
         </div>
+
+        <!-- Editor de template para E-mail (aparece quando canal = E-mail) -->
+        <div class="lote-email-editor" id="lote-email-editor">
+          <div class="lote-email-editor-label">✉️ Assunto</div>
+          <input type="text" class="lote-email-subj-input" id="lote-email-subj" placeholder="[Estácio] Assunto do e-mail..." oninput="atualizarPreviewEmailLote()">
+          <div class="lote-email-editor-label" style="margin-top:6px">Mensagem (pode editar)</div>
+          <div class="lote-email-chips" id="lote-email-chips">
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{nome}')">📌 {nome}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{nomecompleto}')">📌 {nomecompleto}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{curso}')">📌 {curso}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{matricula}')">📌 {matricula}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{prazo}')">📌 {prazo}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{valor}')">📌 {valor}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{divida}')">📌 {divida}</span>
+            <span class="lote-email-chip" onclick="inserirVarLote('msg','{atendente}')">📌 {atendente}</span>
+          </div>
+          <textarea class="lote-email-textarea" id="lote-email-msg" oninput="atualizarPreviewEmailLote()" placeholder="Digite a mensagem ou use os chips acima para inserir variáveis..."></textarea>
+          <div class="lote-email-preview-label">Prévia (primeiro aluno da lista)</div>
+          <div class="lote-email-preview-box" id="lote-email-preview">—</div>
+          <div class="lote-email-count" id="lote-email-count"></div>
+        </div>
+
         <div class="lote-field" id="lote-preview-wrap" style="display:none">
           <label>Preview da mensagem (1° aluno)</label>
           <div class="lote-preview" id="lote-preview"></div>
@@ -6641,11 +6767,6 @@ function importarEventos(input) {
             ✅ <span id="lote-mala-nome-arquivo">mala_direta.xlsx</span>
             <span id="lote-mala-subtitulo">Baixada na pasta Downloads.</span>
           </div>
-          <div class="lote-mala-msg-label">
-            Mensagem (modelo — edite se precisar)
-            <span>Alterações refletem na planilha ao baixar de novo</span>
-          </div>
-          <textarea class="lote-mala-msg-textarea" id="lote-mala-msg-edit" rows="4"></textarea>
           <div class="lote-mala-como">Como enviar pelo seu Outlook (<span id="lote-mala-email-ref">marques.marcela@estacio.br</span>)</div>
           <ol class="lote-mala-steps">
             <li>Abra o <b>Word</b> com um documento em branco.</li>
@@ -6657,10 +6778,10 @@ function importarEventos(input) {
           </ol>
           <div class="lote-mala-assunto-label">Linha de assunto:</div>
           <div class="lote-mala-assunto-row">
-            <input type="text" class="lote-mala-assunto-input" id="lote-mala-assunto" readonly>
+            <input type="text" class="lote-mala-assunto-input" id="lote-mala-assunto">
             <button class="btn btn-sm" onclick="copiarAssuntoLote()">Copiar</button>
           </div>
-          <div class="lote-mala-warn">⚠️ A mala direta do Word usa o mesmo assunto para todos. Troque as variáveis {…} do assunto por um texto fixo.</div>
+          <div class="lote-mala-warn">⚠️ A mala direta do Word exige um assunto fixo (igual para todos). O assunto acima já foi personalizado com o curso — edite se quiser outro texto antes de copiar.</div>
           <div class="lote-mala-info">Precisa do <b>Outlook clássico</b> instalado no Windows e aberto com a conta institucional. O "novo Outlook" e o Outlook na web não fazem mala direta. Os e-mails ficam na Caixa de Saída e saem aos poucos, pode deixar o Outlook aberto até terminar.</div>
           <p style="font-size:12px;color:var(--text2);margin:0 0 10px">Depois de enviar, clique em <b>Registrar como enviados</b> para gravar no histórico de envios e nos acionamentos.</p>
           <div class="lote-mala-footer">
