@@ -437,6 +437,10 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .lote-mala-warn{background:#fff9db;border:1px solid #ffe066;border-radius:6px;padding:7px 10px;font-size:11px;color:#856404;margin-bottom:10px}
 .lote-mala-info{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:12px}
 .lote-mala-footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.lote-mala-msg-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between}
+.lote-mala-msg-label span{font-size:10px;font-weight:400;color:var(--text3);text-transform:none;letter-spacing:0}
+.lote-mala-msg-textarea{width:100%;min-height:90px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text);background:var(--surface);resize:vertical;font-family:inherit;line-height:1.5;margin-bottom:8px}
+.lote-mala-msg-textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 
 /* ====== CALENDÁRIO ACADÊMICO — GRADE MENSAL ====== */
 .cal-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
@@ -5854,9 +5858,11 @@ async function executarLote(canal) {
 
     // Preencher painel
     var assuntoBase = emailList[0] ? emailList[0].subj : '[Estácio] Mensagem';
+    var msgModelo = emailList[0] ? emailList[0].msg : '';
     document.getElementById('lote-mala-nome-arquivo').textContent = '✅ Planilha gerada: ' + nomeArquivo;
     document.getElementById('lote-mala-subtitulo').textContent = emailList.length + ' alunos. Ela está na pasta Downloads.';
     document.getElementById('lote-mala-assunto').value = assuntoBase;
+    document.getElementById('lote-mala-msg-edit').value = msgModelo;
 
     // Esconder footer normal e mostrar painel
     resEl.style.display = 'none';
@@ -5918,13 +5924,25 @@ function gerarXlsxMalaDireta(emailList) {
 }
 
 function baixarMalaDiretoNovamente() {
-  if (!_LOTE_XLSX_BLOB) return;
+  if (!_LOTE_EMAIL_LIST.length) return;
+  // Aplicar mensagem editada se o usuário alterou o textarea
+  var msgEditEl = document.getElementById('lote-mala-msg-edit');
+  var msgEditada = msgEditEl ? msgEditEl.value.trim() : '';
+  var listaAtualizada = _LOTE_EMAIL_LIST.map(function(e) {
+    return msgEditada ? Object.assign({}, e, { msg: msgEditada }) : e;
+  });
+  if (msgEditada) _LOTE_EMAIL_LIST = listaAtualizada;
+  var xlsxResult = gerarXlsxMalaDireta(listaAtualizada);
+  _LOTE_XLSX_BLOB = xlsxResult;
   var hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  var nomeArq = 'mala_direta_' + hoje + '_' + listaAtualizada.length + 'alunos.' + xlsxResult.ext;
   var a = document.createElement('a');
-  a.href = URL.createObjectURL(_LOTE_XLSX_BLOB.blob);
-  a.download = 'mala_direta_' + hoje + '_' + _LOTE_EMAIL_LIST.length + 'alunos.' + _LOTE_XLSX_BLOB.ext;
+  a.href = URL.createObjectURL(xlsxResult.blob);
+  a.download = nomeArq;
   a.click();
   URL.revokeObjectURL(a.href);
+  var nomeEl = document.getElementById('lote-mala-nome-arquivo');
+  if (nomeEl) nomeEl.textContent = '✅ Planilha atualizada: ' + nomeArq;
 }
 
 function copiarAssuntoLote() {
@@ -6623,6 +6641,11 @@ function importarEventos(input) {
             ✅ <span id="lote-mala-nome-arquivo">mala_direta.xlsx</span>
             <span id="lote-mala-subtitulo">Baixada na pasta Downloads.</span>
           </div>
+          <div class="lote-mala-msg-label">
+            Mensagem (modelo — edite se precisar)
+            <span>Alterações refletem na planilha ao baixar de novo</span>
+          </div>
+          <textarea class="lote-mala-msg-textarea" id="lote-mala-msg-edit" rows="4"></textarea>
           <div class="lote-mala-como">Como enviar pelo seu Outlook (<span id="lote-mala-email-ref">marques.marcela@estacio.br</span>)</div>
           <ol class="lote-mala-steps">
             <li>Abra o <b>Word</b> com um documento em branco.</li>
