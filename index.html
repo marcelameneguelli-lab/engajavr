@@ -284,17 +284,12 @@ tbody tr.flagged td { background: #fff9f9; }
 .evo-tbl tr:hover td { background: var(--surface2); }
 
 /* Admin / Zona de Perigo */
-.admin-overlay{position:fixed;inset:0;background:rgba(15,20,35,.6);z-index:2000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
-.admin-overlay.open{display:flex}
-.admin-box{background:var(--surface);border-radius:var(--border-radius-lg);box-shadow:var(--shadow-md);width:min(420px,92vw);padding:28px}
-.admin-box h2{font-size:16px;font-weight:700;margin-bottom:6px}
-.admin-box p{font-size:12px;color:var(--text-secondary);margin-bottom:16px}
 .admin-pin{display:flex;gap:8px;justify-content:center;margin-bottom:16px}
-.admin-pin input{width:44px;height:52px;text-align:center;font-size:22px;font-weight:700;border:2px solid var(--border-tertiary);border-radius:var(--border-radius-md);background:var(--surface);color:var(--text-primary);outline:none;transition:border-color .15s}
-.admin-pin input:focus{border-color:var(--color-background-info)}
-.admin-error{color:#e03131;font-size:12px;text-align:center;margin-bottom:10px;min-height:18px}
-.admin-panel{display:none}
-.admin-panel.open{display:block}
+.admin-pin input{width:44px;height:52px;text-align:center;font-size:22px;font-weight:700;border:2px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-primary);outline:none;transition:border-color .15s}
+.admin-pin input:focus{border-color:#3b82f6}
+.admin-subtab{padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--text3);transition:all .15s;margin-bottom:-1px}
+.admin-subtab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.admin-subtab:hover:not(.active){color:var(--text2)}
 .danger-btn{padding:9px 16px;border-radius:var(--border-radius-md);font-size:13px;font-weight:600;cursor:pointer;border:none;width:100%;margin-bottom:8px;text-align:left;transition:all .15s}
 .danger-btn-hist{background:#fff5f5;color:#c92a2a;border:1.5px solid #ffc9c9}
 .danger-btn-hist:hover{background:#e03131;color:#fff}
@@ -569,8 +564,8 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="tab" id="tab-tarefas" onclick="showPage('tarefas')">✅ Tarefas</button>
     <button class="tab" onclick="showPage('tutoriais')">📚 Tutoriais</button>
     <button class="tab" onclick="showPage('financeiro')">💰 Financeiro</button>
-    <button class="tab" onclick="showPage('relatorio')">📊 Relatório</button>
     <button class="tab" onclick="showPage('importar')">Importar</button>
+    <button class="tab" onclick="showPage('admin')" style="margin-left:auto;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
   <div class="base-selector" id="base-selector">
     <button class="base-btn base-btn-impar active" id="btn-base-impar" onclick="switchBase('impar')" title="Semestre Ímpar">📘 Semestre Ímpar</button>
@@ -604,7 +599,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <span id="base-indicator" class="base-badge base-badge-impar">Base: Ímpar 2026.1</span>
     <span class="sync-dot" id="sync-dot"></span>
     <span class="sync-label" id="sync-label">Tempo real</span>
-    <button class="btn btn-sm" onclick="openAdmin()" style="margin-left:4px;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
+    <button class="btn btn-sm" onclick="showPage('admin')" style="margin-left:4px;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
 </div>
 
@@ -1062,57 +1057,187 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     </div>
   </div>
 
-  <!-- RELATÓRIO DE ATENDENTES -->
-  <div class="page" id="page-relatorio">
-    <div class="dash-page" style="max-width:100%;padding:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-        <div>
-          <h2 style="font-size:20px;font-weight:700;margin:0">📊 Relatório de Atendentes</h2>
-          <div style="font-size:13px;color:var(--text3);margin-top:2px">Produtividade, controle de inadimplência e trancamentos por período</div>
+  <!-- ===== PAGE ADMIN ===== -->
+  <div class="page" id="page-admin">
+    <div style="max-width:860px;margin:0 auto;padding:24px 16px">
+
+      <!-- Tela de PIN -->
+      <div id="admin-pin-screen" style="text-align:center;padding:40px 20px">
+        <div style="font-size:48px;margin-bottom:12px">🔐</div>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin-bottom:6px">Área Administrativa</h2>
+        <p style="font-size:13px;color:var(--text3);margin-bottom:28px">Acesso restrito. Digite a senha de 4 dígitos para continuar.</p>
+        <div class="admin-pin" id="pin-inputs" style="justify-content:center;margin-bottom:12px">
+          <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,0)" onkeydown="pinKey(event,this,0)">
+          <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,1)" onkeydown="pinKey(event,this,1)">
+          <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,2)" onkeydown="pinKey(event,this,2)">
+          <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,3)" onkeydown="pinKey(event,this,3)">
         </div>
-        <button class="btn btn-sm btn-primary" onclick="exportarRelatorioXLSX()">⬇️ Exportar XLSX</button>
+        <div id="pin-error" style="min-height:18px;font-size:12px;color:#c92a2a;font-weight:600;margin-bottom:8px"></div>
+        <div style="font-size:11px;color:var(--text3)">A sessão expira automaticamente após 15 minutos sem atividade.</div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding:14px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
-        <div style="flex:1;min-width:140px">
-          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Período</label>
-          <select id="rel-periodo" class="search-input" onchange="renderRelatorioAtendentes()" style="width:100%">
-            <option value="7">Últimos 7 dias</option>
-            <option value="15">Últimos 15 dias</option>
-            <option value="30" selected>Últimos 30 dias</option>
-            <option value="60">Últimos 60 dias</option>
-            <option value="90">Últimos 90 dias</option>
-            <option value="9999">Todo o histórico</option>
-          </select>
+
+      <!-- Painel (visível após PIN correto) -->
+      <div id="admin-panel-page" style="display:none">
+
+        <!-- Cabeçalho -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid var(--border)">
+          <div>
+            <h2 style="font-size:18px;font-weight:800;margin:0 0 2px">🔐 Área Administrativa</h2>
+            <div style="font-size:12px;color:var(--text3)">Sessão ativa — expira em <span id="admin-timer-display">15:00</span></div>
+          </div>
+          <button class="btn btn-sm" onclick="adminLogout()" style="border-color:#ffc9c9;color:#c92a2a">🚪 Sair</button>
         </div>
-        <div style="flex:1;min-width:180px">
-          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente</label>
-          <select id="rel-atend-filtro" class="search-input" onchange="renderRelatorioAtendentes()" style="width:100%">
-            <option value="">Todos os atendentes</option>
-          </select>
+
+        <!-- Sub-abas Admin -->
+        <div style="display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
+          <button class="admin-subtab active" data-subtab="gestao" onclick="switchAdminSubtab('gestao')">⚙️ Gestão</button>
+          <button class="admin-subtab" data-subtab="relatorio" onclick="switchAdminSubtab('relatorio')">📊 Relatório</button>
+          <button class="admin-subtab" data-subtab="perigo" onclick="switchAdminSubtab('perigo')">⚠️ Zona de Perigo</button>
         </div>
-      </div>
-      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:12px;padding:8px 12px;background:var(--accent-bg);border-radius:6px" id="rel-resumo"></div>
-      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="background:var(--surface)">
-              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Atendente</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Acionamentos</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Alunos únicos</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#c92a2a">💰 Financeiro</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#e67700">⚠️ Trancamento</th>
-              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Top motivos</th>
-              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Canais</th>
-            </tr>
-          </thead>
-          <tbody id="rel-tbody">
-            <tr><td colspan="7" style="padding:30px;text-align:center;color:var(--text3)">Carregando…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div style="margin-top:14px;font-size:11px;color:var(--text3);text-align:center">Dados consolidados de todas as bases carregadas neste navegador. Exporte para XLSX para análise detalhada.</div>
+
+        <!-- Sub-aba: Gestão -->
+        <div class="admin-subtab-content" id="admsub-gestao">
+
+          <!-- Publicar no GAS -->
+          <div style="background:#eef2ff;border:1px solid #bac8ff;border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:#3b5bdb;margin-bottom:6px">🚀 Publicar atualização no GAS</div>
+            <div style="font-size:11px;color:#5c7cfa;margin-bottom:10px">Sobe o HTML atual para o GAS — a equipe acessa pelo link sem precisar do GitHub. Use após cada atualização do sistema.</div>
+            <button class="btn btn-primary" onclick="publicarNoGAS()" style="width:100%;font-size:12px">📤 Publicar versão atual no GAS</button>
+            <div id="publish-result" style="font-size:11px;margin-top:8px;color:var(--text3)"></div>
+          </div>
+
+          <!-- Alterar senha -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:8px">🔑 Alterar senha de acesso</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="password" id="admin-new-pin-1" maxlength="4" placeholder="Nova senha (4 dígitos)" style="flex:1;min-width:160px;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;letter-spacing:4px">
+              <input type="password" id="admin-new-pin-2" maxlength="4" placeholder="Confirmar senha" style="flex:1;min-width:160px;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;letter-spacing:4px">
+              <button class="btn btn-sm btn-primary" onclick="adminAlterarSenha()">Salvar</button>
+            </div>
+            <div id="admin-pin-change-result" style="font-size:12px;margin-top:6px"></div>
+          </div>
+
+          <!-- Gestão de atendentes -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:10px">👥 Equipe de Atendentes</div>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <input type="text" id="novo-atend-input" placeholder="Nome do atendente" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <button class="btn btn-sm btn-primary" onclick="adicionarAtendente()">+ Adicionar</button>
+            </div>
+            <div class="atend-list" id="atend-list"></div>
+            <div id="atend-result" style="font-size:12px;margin-top:6px"></div>
+          </div>
+
+          <!-- Renomear no histórico -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:6px">✏️ Renomear no histórico</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Corrige nomes duplicados (ex: MARCELA → Marcela) em todos os acionamentos.</div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+              <select id="admin-rename-de" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
+                <option value="">— Nome atual (de) —</option>
+              </select>
+              <span style="font-size:13px">→</span>
+              <input id="admin-rename-para" type="text" placeholder="Novo nome" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+              <button class="btn btn-sm btn-primary" onclick="adminRenomearHistorico()">✏️ Renomear</button>
+            </div>
+            <div id="rename-hist-result" style="font-size:12px;color:var(--text3)"></div>
+          </div>
+
+          <!-- Base ativa -->
+          <div id="admin-base-label" style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Base ativa: —</div>
+
+        </div>
+
+        <!-- Sub-aba: Relatório -->
+        <div class="admin-subtab-content" id="admsub-relatorio" style="display:none">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding:14px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+            <div style="flex:1;min-width:140px">
+              <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Período</label>
+              <select id="rel-periodo" class="search-input" onchange="renderRelatorioAtendentes()" style="width:100%">
+                <option value="7">Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30" selected>Últimos 30 dias</option>
+                <option value="60">Últimos 60 dias</option>
+                <option value="90">Últimos 90 dias</option>
+                <option value="9999">Todo o histórico</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:180px">
+              <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente</label>
+              <select id="rel-atend-filtro" class="search-input" onchange="renderRelatorioAtendentes()" style="width:100%">
+                <option value="">Todos os atendentes</option>
+              </select>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="exportarRelatorioXLSX()" style="height:36px">⬇️ Exportar XLSX</button>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:12px;padding:8px 12px;background:var(--accent-bg);border-radius:6px" id="rel-resumo"></div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead>
+                <tr style="background:var(--surface)">
+                  <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Atendente</th>
+                  <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Acionamentos</th>
+                  <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Alunos únicos</th>
+                  <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#c92a2a">💰 Financeiro</th>
+                  <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#e67700">⚠️ Trancamento</th>
+                  <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Top motivos</th>
+                  <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Canais</th>
+                </tr>
+              </thead>
+              <tbody id="rel-tbody">
+                <tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text3)">Carregando…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:var(--text3);text-align:center">
+            Dados consolidados de todas as bases. Exporte para XLSX para análise detalhada por aluno.
+          </div>
+        </div>
+
+        <!-- Sub-aba: Zona de Perigo -->
+        <div class="admin-subtab-content" id="admsub-perigo" style="display:none">
+          <div style="background:#fff5f5;border:2px solid #ffc9c9;border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;color:#c92a2a;margin-bottom:6px">⚠️ Atenção — estas ações são irreversíveis</div>
+            <div style="font-size:12px;color:#c92a2a">Tenha absoluta certeza antes de prosseguir. Não há como desfazer.</div>
+          </div>
+          <div style="background:#fff5f5;border:1px solid #ffc9c9;border-radius:8px;padding:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:#c92a2a;margin-bottom:8px">💀 Reset Completo do Sistema</div>
+            <div style="font-size:11px;color:#c92a2a;margin-bottom:10px">Remove TODOS os dados locais: base de alunos, histórico, contatos, follow-ups, snapshots, eventos e configurações. Não afeta o GAS.</div>
+            <button class="danger-btn danger-btn-all" onclick="resetCompleto()" style="background:#c92a2a;color:#fff;border:none;width:100%">💀 Resetar tudo (localStorage)</button>
+          </div>
+          <button class="danger-btn danger-btn-hist" onclick="adminClearHistory()">🗑️ Limpar histórico — base ativa</button>
+          <button class="danger-btn danger-btn-all" onclick="adminClearAll()">💀 Limpar TUDO — base ativa (base + histórico)</button>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por semestre</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+            <button class="danger-btn danger-btn-hist" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('hist','impar')">🗑️ Histórico<br><small>📘 Ímpar</small></button>
+            <button class="danger-btn danger-btn-hist" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('hist','par')">🗑️ Histórico<br><small>📗 Par</small></button>
+            <button class="danger-btn danger-btn-hist" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('hist','ct')">🗑️ Histórico<br><small>📙 Técnico</small></button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            <button class="danger-btn danger-btn-all" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('all','impar')">💀 Base+Hist<br><small>📘 Ímpar</small></button>
+            <button class="danger-btn danger-btn-all" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('all','par')">💀 Base+Hist<br><small>📗 Par</small></button>
+            <button class="danger-btn danger-btn-all" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('all','ct')">💀 Base+Hist<br><small>📙 Técnico</small></button>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por atendente</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="admin-atend-sel" style="flex:1;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
+              <option value="">— selecionar atendente —</option>
+            </select>
+            <button class="danger-btn danger-btn-hist" style="margin:0;padding:6px 12px;width:auto" onclick="adminClearAtend()">🗑️ Apagar</button>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por período (data)</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <input type="date" id="admin-dt-ini" style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <span style="font-size:12px;color:var(--text3)">até</span>
+            <input type="date" id="admin-dt-fim" style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <button class="danger-btn danger-btn-hist" style="margin:0;padding:6px 12px;width:auto" onclick="adminClearPeriodo()">🗑️ Apagar</button>
+          </div>
+          <div id="admin-result" style="margin-top:12px;font-size:12px"></div>
+        </div>
+
+      </div><!-- fim admin-panel-page -->
     </div>
-  </div>
+  </div><!-- fim page-admin -->
 
 </div><!-- fim .main -->
 
@@ -3725,23 +3850,16 @@ async function clearAllData() {
 
 
 // ========== ADMIN / ZONA DE PERIGO COM SENHA ==========
-const ADMIN_PIN = '1234'; // ← ALTERE PARA SUA SENHA
+var ADMIN_PIN = localStorage.getItem('engajavr_admin_pin') || '1234';
+var _adminAutenticado = false;
+var _adminTimerInterval = null;
+var _adminTimerSegundos = 0;
+var _ADMIN_TIMEOUT = 15 * 60; // 15 minutos
 
-function openAdmin() {
-  document.getElementById('admin-overlay').classList.add('open');
-  document.getElementById('admin-panel').classList.remove('open');
-  document.getElementById('pin-error').textContent = '';
-  document.getElementById('admin-result').textContent = '';
-  document.querySelectorAll('.pin-digit').forEach(i => i.value = '');
-  setTimeout(() => document.querySelectorAll('.pin-digit')[0].focus(), 100);
-  // Label base ativa
+function _adminPopularSelects() {
   var lbl = document.getElementById('admin-base-label');
   if (lbl) { var cfg = BASE_CONFIG[ACTIVE_BASE]; lbl.textContent = 'Base ativa: ' + cfg.emoji + ' ' + cfg.label; }
-  // Renderizar lista de atendentes com botões Renomear e Remover
   renderAtendentes();
-  // Popular select de atendentes (para apagar por atendente)
-  var sel = document.getElementById('admin-atend-sel');
-  // Coletar TODOS os nomes do histórico (inclui variações de grafia)
   var allNames = new Set();
   Object.keys(BASE_CONFIG).forEach(function(bk) {
     var h = bk === ACTIVE_BASE ? HISTORY : {};
@@ -3749,25 +3867,71 @@ function openAdmin() {
     Object.values(h).forEach(function(arr) { arr.forEach(function(a) { if (a.atend) allNames.add(a.atend); }); });
   });
   var sortedNames = Array.from(allNames).sort();
+  var sel = document.getElementById('admin-atend-sel');
   if (sel) {
     sel.innerHTML = '<option value="">— selecionar atendente —</option>';
     sortedNames.forEach(function(a) { sel.innerHTML += '<option value="' + a + '">' + a + '</option>'; });
   }
-  // Popular select de renomear (De)
   var renDe = document.getElementById('admin-rename-de');
   if (renDe) {
     renDe.innerHTML = '<option value="">— Nome atual (de) —</option>';
     sortedNames.forEach(function(a) { renDe.innerHTML += '<option value="' + a + '">' + a + '</option>'; });
   }
-  // admin-rename-para é um input de texto — não precisa popular
 }
 
-function closeAdmin() {
-  document.getElementById('admin-overlay').classList.remove('open');
-  document.querySelectorAll('.pin-digit').forEach(i => i.value = '');
-  document.getElementById('admin-panel').classList.remove('open');
-  document.getElementById('pin-error').textContent = '';
+function _initAdmin() {
+  if (_adminAutenticado) {
+    document.getElementById('admin-pin-screen').style.display = 'none';
+    document.getElementById('admin-panel-page').style.display = 'block';
+    _adminPopularSelects();
+  } else {
+    document.getElementById('admin-pin-screen').style.display = 'block';
+    document.getElementById('admin-panel-page').style.display = 'none';
+    document.getElementById('pin-error').textContent = '';
+    document.querySelectorAll('.pin-digit').forEach(function(i) { i.value = ''; });
+    setTimeout(function() {
+      var first = document.querySelectorAll('.pin-digit')[0];
+      if (first) first.focus();
+    }, 100);
+  }
 }
+
+function _adminIniciarTimer() {
+  _adminTimerSegundos = _ADMIN_TIMEOUT;
+  if (_adminTimerInterval) clearInterval(_adminTimerInterval);
+  _adminTimerInterval = setInterval(function() {
+    _adminTimerSegundos--;
+    var el = document.getElementById('admin-timer-display');
+    if (el) {
+      var m = Math.floor(_adminTimerSegundos / 60);
+      var s = _adminTimerSegundos % 60;
+      el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    if (_adminTimerSegundos <= 0) {
+      adminLogout();
+      showToast('🔐 Sessão administrativa expirada por inatividade.');
+    }
+  }, 1000);
+}
+
+function adminLogout() {
+  _adminAutenticado = false;
+  if (_adminTimerInterval) { clearInterval(_adminTimerInterval); _adminTimerInterval = null; }
+  showPage('painel');
+}
+
+function switchAdminSubtab(name) {
+  document.querySelectorAll('.admin-subtab').forEach(function(b) { b.classList.toggle('active', b.dataset.subtab === name); });
+  document.querySelectorAll('.admin-subtab-content').forEach(function(d) { d.style.display = 'none'; });
+  var el = document.getElementById('admsub-' + name);
+  if (el) el.style.display = 'block';
+  if (name === 'relatorio') _initRelatorio();
+  _adminTimerSegundos = _ADMIN_TIMEOUT; // reset timer on activity
+}
+
+// Compatibilidade com chamadas legadas
+function openAdmin() { showPage('admin'); }
+function closeAdmin() { showPage('painel'); }
 
 function pinNext(el, idx) {
   el.value = el.value.replace(/[^0-9]/g,'');
@@ -3784,17 +3948,40 @@ function pinKey(e, el, idx) {
 }
 
 function checkPin() {
-  const digits = document.querySelectorAll('.pin-digit');
-  const entered = Array.from(digits).map(i => i.value).join('');
+  var digits = document.querySelectorAll('.pin-digit');
+  var entered = Array.from(digits).map(function(i) { return i.value; }).join('');
   if (entered.length < 4) return;
+  // Recarregar PIN do localStorage (pode ter sido alterado)
+  ADMIN_PIN = localStorage.getItem('engajavr_admin_pin') || '1234';
   if (entered === ADMIN_PIN) {
+    _adminAutenticado = true;
     document.getElementById('pin-error').textContent = '';
-    document.getElementById('admin-panel').classList.add('open');
+    document.getElementById('admin-pin-screen').style.display = 'none';
+    document.getElementById('admin-panel-page').style.display = 'block';
+    _adminPopularSelects();
+    _adminIniciarTimer();
+    // Mostrar sub-aba padrão
+    switchAdminSubtab('gestao');
   } else {
     document.getElementById('pin-error').textContent = '❌ Senha incorreta. Tente novamente.';
-    digits.forEach(i => i.value = '');
+    digits.forEach(function(i) { i.value = ''; });
     digits[0].focus();
   }
+}
+
+function adminAlterarSenha() {
+  var p1 = document.getElementById('admin-new-pin-1').value.trim();
+  var p2 = document.getElementById('admin-new-pin-2').value.trim();
+  var res = document.getElementById('admin-pin-change-result');
+  if (!/^\d{4}$/.test(p1)) { res.textContent = '❌ A senha deve ter exatamente 4 dígitos numéricos.'; res.style.color = '#c92a2a'; return; }
+  if (p1 !== p2) { res.textContent = '❌ As senhas não coincidem.'; res.style.color = '#c92a2a'; return; }
+  localStorage.setItem('engajavr_admin_pin', p1);
+  ADMIN_PIN = p1;
+  document.getElementById('admin-new-pin-1').value = '';
+  document.getElementById('admin-new-pin-2').value = '';
+  res.textContent = '✅ Senha alterada com sucesso!';
+  res.style.color = '#2b8a3e';
+  _adminTimerSegundos = _ADMIN_TIMEOUT;
 }
 
 
@@ -4324,6 +4511,7 @@ function showPage(p) {
   if (p === 'importar')   updateImportLabel();
   if (p === 'financeiro') _initFinanceiro();
   if (p === 'relatorio')  _initRelatorio();
+  if (p === 'admin')      _initAdmin();
 }
 
 function filtrarFinPage(tipo) {
@@ -7052,8 +7240,9 @@ function exportarInadimplentesXLSX() {
 
 // ========== RELATÓRIO DE ATENDENTES ==========
 function abrirRelatorioAtendentes() {
-  // Redireciona para a página Relatório na navbar
-  showPage('relatorio');
+  // Relatório agora fica dentro do Admin (sub-aba)
+  showPage('admin');
+  if (_adminAutenticado) switchAdminSubtab('relatorio');
 }
 
 function fecharRelatorioAtendentes() {
@@ -7196,101 +7385,6 @@ function exportarRelatorioXLSX() {
 
 </script>
 
-<!-- ADMIN / ZONA DE PERIGO -->
-<div class="admin-overlay" id="admin-overlay" onclick="if(event.target===this)closeAdmin()">
-  <div class="admin-box">
-    <h2>🔐 Área Administrativa</h2>
-    <p>Digite a senha de 4 dígitos para acessar as opções de gerenciamento.</p>
-    <div class="admin-pin" id="pin-inputs">
-      <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,0)" onkeydown="pinKey(event,this,0)">
-      <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,1)" onkeydown="pinKey(event,this,1)">
-      <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,2)" onkeydown="pinKey(event,this,2)">
-      <input type="password" maxlength="1" class="pin-digit" oninput="pinNext(this,3)" onkeydown="pinKey(event,this,3)">
-    </div>
-    <div class="admin-error" id="pin-error"></div>
-    <div class="admin-panel" id="admin-panel">
-      <!-- Publicar app no GAS (para acesso sem GitHub) -->
-      <div style="background:#eef2ff;border:1px solid #bac8ff;border-radius:8px;padding:12px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:#3b5bdb;margin-bottom:6px">🚀 Publicar atualização no GAS</div>
-        <div style="font-size:11px;color:#5c7cfa;margin-bottom:10px">Sobe o HTML atual para o GAS — a equipe acessa pelo link do GAS sem precisar do GitHub. Use após cada atualização do sistema.</div>
-        <button class="btn btn-primary" onclick="publicarNoGAS()" style="width:100%;font-size:12px">📤 Publicar versão atual no GAS</button>
-        <div id="publish-result" style="font-size:11px;margin-top:8px;color:var(--text3)"></div>
-      </div>
-        ⚠️ Estas ações são <strong>irreversíveis</strong>. Tenha certeza antes de prosseguir.
-      </div>
-      <!-- Reset completo -->
-      <div style="background:#fff5f5;border:1px solid #ffc9c9;border-radius:8px;padding:12px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:#c92a2a;margin-bottom:8px">💀 Reset Completo do Sistema</div>
-        <div style="font-size:11px;color:#c92a2a;margin-bottom:10px">Remove TODOS os dados locais: base de alunos, histórico, contatos, follow-ups, snapshots, eventos e configurações. Não afeta o GAS.</div>
-        <button class="danger-btn danger-btn-all" onclick="resetCompleto()" style="background:#c92a2a;color:#fff;border:none;width:100%">💀 Resetar tudo (localStorage)</button>
-      </div>
-      <!-- Base ativa -->
-      <div id="admin-base-label" style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Base ativa: —</div>
-      <button class="danger-btn danger-btn-hist" onclick="adminClearHistory()">🗑️ Limpar histórico — base ativa</button>
-      <button class="danger-btn danger-btn-all" onclick="adminClearAll()">💀 Limpar TUDO — base ativa (base + histórico)</button>
-
-      <!-- Por semestre -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por semestre</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
-        <button class="danger-btn danger-btn-hist" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('hist','impar')">🗑️ Histórico<br><small>📘 Ímpar</small></button>
-        <button class="danger-btn danger-btn-hist" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('hist','par')">🗑️ Histórico<br><small>📗 Par</small></button>
-        <button class="danger-btn danger-btn-hist" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('hist','ct')">🗑️ Histórico<br><small>📙 Técnico</small></button>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-        <button class="danger-btn danger-btn-all" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('all','impar')">💀 Base+Hist<br><small>📘 Ímpar</small></button>
-        <button class="danger-btn danger-btn-all" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('all','par')">💀 Base+Hist<br><small>📗 Par</small></button>
-        <button class="danger-btn danger-btn-all" style="margin:0;font-size:11px;text-align:center;padding:8px 4px" onclick="adminClearSem('all','ct')">💀 Base+Hist<br><small>📙 Técnico</small></button>
-      </div>
-
-      <!-- Gestão de atendentes -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">
-        👥 Equipe de Atendentes
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:8px">
-        <input type="text" id="novo-atend-input" placeholder="Nome do atendente" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-        <button class="btn btn-sm btn-primary" onclick="adicionarAtendente()">+ Adicionar</button>
-      </div>
-      <div class="atend-list" id="atend-list"></div>
-      <div id="atend-result" style="font-size:12px;margin-top:6px"></div>
-
-      <!-- Renomear por histórico -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">✏️ Renomear no histórico</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Corrige nomes duplicados (ex: MARCELA → Marcela) em todos os acionamentos.</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-        <select id="admin-rename-de" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
-          <option value="">— Nome atual (de) —</option>
-        </select>
-        <span style="font-size:13px">→</span>
-        <input id="admin-rename-para" type="text" placeholder="Novo nome" style="flex:1;height:32px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
-        <button class="btn btn-sm btn-primary" onclick="adminRenomearHistorico()">✏️ Renomear</button>
-      </div>
-      <div id="rename-hist-result" style="font-size:12px;color:var(--text3)"></div>
-
-      <!-- Por atendente -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por atendente</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <select id="admin-atend-sel" style="flex:1;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
-          <option value="">— selecionar atendente —</option>
-        </select>
-        <button class="danger-btn danger-btn-hist" style="margin:0;padding:6px 12px;width:auto" onclick="adminClearAtend()">🗑️ Apagar</button>
-      </div>
-
-      <!-- Por período -->
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Por período (data)</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="date" id="admin-dt-ini" style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
-        <span style="font-size:12px;color:var(--text3)">até</span>
-        <input type="date" id="admin-dt-fim" style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
-        <button class="danger-btn danger-btn-hist" style="margin:0;padding:6px 12px;width:auto" onclick="adminClearPeriodo()">🗑️ Apagar</button>
-      </div>
-
-      <div id="admin-result" style="margin-top:12px;font-size:12px"></div>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn" onclick="closeAdmin()">Fechar</button>
-    </div>
-  </div>
-</div>
 
 <div class="ev-alertas-wrap" id="ev-alertas-wrap"></div>
 <div style="text-align:center;padding:10px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);background:var(--surface)">
