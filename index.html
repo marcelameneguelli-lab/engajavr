@@ -602,7 +602,9 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <span id="base-indicator" class="base-badge base-badge-impar">Base: Ímpar 2026.1</span>
     <span class="sync-dot" id="sync-dot"></span>
     <span class="sync-label" id="sync-label">Tempo real</span>
-    <button class="btn btn-sm" onclick="openAdmin()" style="margin-left:8px;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
+    <button class="btn btn-sm" onclick="abrirModalFinanceiro()" style="margin-left:4px;border-color:#ffd43b;color:#854f0b;background:#fff9db;font-weight:700">💰 Financeiro</button>
+    <button class="btn btn-sm" onclick="abrirRelatorioAtendentes()" style="margin-left:4px;border-color:#74c0fc;color:#1864ab;background:#e7f5ff;font-weight:700">📊 Relatório</button>
+    <button class="btn btn-sm" onclick="openAdmin()" style="margin-left:4px;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
 </div>
 
@@ -806,6 +808,13 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
           <button class="btn btn-sm" onclick="buscarBasePublicada()" id="btn-buscar-base" style="width:100%">📥 Buscar base publicada pela coordenação</button>
           <div id="buscar-base-result" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+        </div>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--text2)">💾 Status da base salva</span>
+            <button class="btn btn-sm" onclick="verificarBasesSalvas()">🔍 Verificar</button>
+          </div>
+          <div id="base-storage-status" style="font-size:11px;color:var(--text3);line-height:1.8">Clique em Verificar para checar o que está salvo no navegador.</div>
         </div>
       </div>
       <div class="chart-card" style="max-width:600px;margin-bottom:16px">
@@ -1462,6 +1471,61 @@ async function saveDB(db, key) {
   }
 }
 
+async function verificarBasesSalvas() {
+  const el = document.getElementById('base-storage-status');
+  if (!el) return;
+  el.innerHTML = '⏳ Verificando...';
+  var linhas = [];
+  for (var bk of Object.keys(BASE_CONFIG)) {
+    var cfg = BASE_CONFIG[bk];
+    var k = cfg.storageDB;
+    var found = false;
+    var fonte = '';
+    var qtd = 0;
+    // 1. memStore
+    if (_memStore[k] && _memStore[k].length > 0) {
+      found = true; fonte = 'memória (sessão atual)'; qtd = _memStore[k].length;
+    }
+    // 2. localStorage normal
+    if (!found) {
+      try {
+        var raw = localStorage.getItem(k);
+        if (raw && raw.length > 10) {
+          var db = JSON.parse(raw);
+          if (db && db.length > 0) { found = true; fonte = 'localStorage'; qtd = db.length; }
+        }
+      } catch(e) {}
+    }
+    // 3. localStorage chunks
+    if (!found) {
+      try {
+        var nc = parseInt(localStorage.getItem(k + '_chunks') || '0');
+        if (nc > 0) {
+          var json2 = ''; for (var ci2 = 0; ci2 < nc; ci2++) json2 += localStorage.getItem(k + '_c' + ci2) || '';
+          if (json2.length > 10) { var db2 = JSON.parse(json2); if (db2 && db2.length > 0) { found = true; fonte = 'localStorage (chunks)'; qtd = db2.length; } }
+        }
+      } catch(e) {}
+    }
+    // 4. IndexedDB
+    if (!found) {
+      try {
+        var raw2 = await idbGet(k);
+        if (raw2 && raw2.length > 10) {
+          var db3 = JSON.parse(raw2);
+          if (db3 && db3.length > 0) { found = true; fonte = 'IndexedDB'; qtd = db3.length; }
+        }
+      } catch(e) {}
+    }
+    var emoji = cfg.emoji;
+    if (found) {
+      linhas.push('<span style="color:var(--green,#2b8a3e)">✅ ' + emoji + ' <strong>' + cfg.label + '</strong>: ' + qtd.toLocaleString('pt-BR') + ' alunos salvos (' + fonte + ')</span>');
+    } else {
+      linhas.push('<span style="color:var(--red,#c92a2a)">❌ ' + emoji + ' <strong>' + cfg.label + '</strong>: não encontrada no navegador — importe o CSV ou use "Buscar base publicada"</span>');
+    }
+  }
+  el.innerHTML = linhas.join('<br>');
+}
+
 async function loadDB(key) {
   const k = key || BASE_CONFIG[ACTIVE_BASE].storageDB;
   if (_memStore[k] && Array.isArray(_memStore[k]) && _memStore[k].length > 0) return _memStore[k];
@@ -1557,6 +1621,8 @@ async function init() {
   if (gasInput) gasInput.value = GAS_URL;
   loadTarefas();
   loadTutoriais();
+  // Verificar bases salvas em background (para mostrar status na aba Importar)
+  verificarBasesSalvas().catch(function(){});
   // Sincronizar atendentes do GAS imediatamente no init
   if (GAS_URL) {
     gasCall('getAtendentes').then(function(r) {
@@ -3386,6 +3452,8 @@ function processFile(file) {
       updateDBInfo();
       updateTopCount();
       updatePriorityCounts();
+      // Atualizar status de bases salvas após importação
+      verificarBasesSalvas().catch(function(){});
       showPage('painel');
     } catch(err) {
       resultEl.innerHTML = '<div class="alert alert-danger">❌ Erro ao processar: ' + err.message + '</div>';
@@ -3855,7 +3923,10 @@ function renderFollowup() {
   });
 
   const countEl = document.getElementById('fu-count');
-  if (countEl) countEl.textContent = items.length + ' registro(s)';
+  const totalPend = allItems.filter(function(i) { return !i.fu.done; }).length;
+  if (countEl) countEl.textContent = (filter === 'concluido' ? items.length + ' concluído(s)' : items.length + ' de ' + totalPend + ' pendente(s)');
+  // Atualizar badge da aba
+  updateFuTabBadge();
 
   const listEl = document.getElementById('fu-list');
   if (!listEl) return;
@@ -3967,6 +4038,7 @@ async function sincFuGAS() {
           if (novos > 0) {
             totalNovos += novos;
             try { localStorage.setItem(BASE_CONFIG[ACTIVE_BASE].storageF, JSON.stringify(FOLLOWUPS)); } catch(e) {}
+            STORE.set(BASE_CONFIG[ACTIVE_BASE].storageF, FOLLOWUPS).catch(function(){});
           }
           // Sempre subir o estado local atual para o GAS (garante que done:true sobe)
           gasCall('saveFollowup', { followups: FOLLOWUPS, base: ACTIVE_BASE }).catch(function(){});
@@ -4055,7 +4127,7 @@ async function markFuDone(mat, idx, base) {
 }
 
 function fuBadgeCount() {
-  var today = todayStr();
+  // Conta TODOS os follow-ups pendentes (não concluídos) — consistente com renderFollowup filtro "todos"
   var n = 0;
   Object.keys(BASE_CONFIG).forEach(function(bk) {
     var fuData = {};
@@ -4067,13 +4139,9 @@ function fuBadgeCount() {
     }
     Object.keys(fuData).forEach(function(mat) {
       var fus = fuData[mat];
+      if (!Array.isArray(fus)) return;
       fus.forEach(function(fu) {
-        var fuISO = fu.date || '';
-        if (fuISO && /^\d{2}\/\d{2}\/\d{4}$/.test(fuISO)) {
-          var p = fuISO.split('/');
-          fuISO = p[2] + '-' + p[1] + '-' + p[0];
-        }
-        if (!fu.done && fuISO && fuISO <= today) n++;
+        if (!fu.done) n++;
       });
     });
   });
@@ -6526,6 +6594,456 @@ function importarEventos(input) {
   reader.readAsText(file);
 }
 
+// ========== MODAL FINANCEIRO ==========
+var _FIN_SELECTED = new Set();
+var _FIN_FILTRADOS = [];
+
+function abrirModalFinanceiro() {
+  var sel = document.getElementById('fin-atend-sel');
+  if (sel) {
+    sel.innerHTML = '<option value="">— selecione —</option>' +
+      ATENDENTES.map(function(a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
+  }
+  var msgEl = document.getElementById('fin-msg-template');
+  if (msgEl) msgEl.value = '';
+  atualizarTemplateFin();
+  _FIN_SELECTED.clear();
+  atualizarContadoresFinanceiro();
+  renderModalFinanceiro();
+  document.getElementById('fin-modal-overlay').style.display = 'flex';
+}
+
+function fecharModalFinanceiro() {
+  document.getElementById('fin-modal-overlay').style.display = 'none';
+}
+
+function atualizarTemplateFin() {
+  var canal = (document.getElementById('fin-canal-sel') || {}).value || 'E-mail';
+  var el = document.getElementById('fin-msg-template');
+  if (!el) return;
+  if (canal === 'WhatsApp') {
+    el.value = 'Olá {nome}! 😊\nIdentificamos uma pendência financeira no seu curso *{curso}* no valor de *{divida}*.\nPara regularizar e evitar bloqueio de acesso, entre em contato conosco.\nAtenciosamente, {atendente} — Estácio Volta Redonda.';
+  } else {
+    el.value = 'Prezado(a) {nome},\n\nIdentificamos uma pendência financeira no seu curso {curso}.\nValor em aberto: {divida}.\n\nPor favor, entre em contato com nossa equipe para negociar e regularizar sua situação.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda';
+  }
+}
+
+function atualizarContadoresFinanceiro() {
+  if (!DB || !DB.length) return;
+  var hoje = todayStr();
+  var d5 = new Date(); d5.setDate(d5.getDate() + 5);
+  var d5str = d5.getFullYear() + '-' + String(d5.getMonth()+1).padStart(2,'0') + '-' + String(d5.getDate()).padStart(2,'0');
+  var cntVencer = 0, cntHoje = 0, cntVencido = 0;
+  DB.forEach(function(r) {
+    if (r.INADIMPLENTE != 1) return;
+    var venc = getVencimentoISO(r);
+    if (!venc) return;
+    if (venc === hoje) cntHoje++;
+    else if (venc < hoje) cntVencido++;
+    else if (venc <= d5str) cntVencer++;
+  });
+  setText('fin-cnt-vencer', cntVencer);
+  setText('fin-cnt-hoje', cntHoje);
+  setText('fin-cnt-vencido', cntVencido);
+}
+
+function getVencimentoISO(r) {
+  var raw = r.DATA_VENCIMENTO || r.VENCIMENTO_PROMESSA || r.DAT_LIMITE_RENOVACAO || '';
+  if (!raw) {
+    var dia = parseInt(r.NUM_DIA_VENCTO);
+    if (dia && dia >= 1 && dia <= 31) {
+      var now = new Date();
+      var y = now.getFullYear(), m = now.getMonth() + 1;
+      return y + '-' + String(m).padStart(2,'0') + '-' + String(dia).padStart(2,'0');
+    }
+    return '';
+  }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+    var p = raw.split('/'); return p[2] + '-' + p[1] + '-' + p[0];
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return '';
+}
+
+function filtrarFinModal(tipo) {
+  var el = document.getElementById('fin-filtro-tipo');
+  if (el) el.value = tipo;
+  renderModalFinanceiro();
+}
+
+function renderModalFinanceiro() {
+  if (!DB || !DB.length) return;
+  var filtro = (document.getElementById('fin-filtro-tipo') || {}).value || 'todos';
+  var busca  = ((document.getElementById('fin-busca') || {}).value || '').toLowerCase().trim();
+  var hoje   = todayStr();
+  var d5 = new Date(); d5.setDate(d5.getDate() + 5);
+  var d5str = d5.getFullYear() + '-' + String(d5.getMonth()+1).padStart(2,'0') + '-' + String(d5.getDate()).padStart(2,'0');
+
+  var lista = DB.filter(function(r) {
+    if (r.INADIMPLENTE != 1) return false;
+    if (busca) {
+      var nome = (r.NOM_ALUNO || '').toLowerCase();
+      var mat  = (r.COD_MATRICULA || '').toLowerCase();
+      if (nome.indexOf(busca) < 0 && mat.indexOf(busca) < 0) return false;
+    }
+    var venc = getVencimentoISO(r);
+    var div = parseBRNum(r.VAL_DIVIDA);
+    if (filtro === 'hoje')    return venc === hoje;
+    if (filtro === 'vencer')  return venc > hoje && venc <= d5str;
+    if (filtro === 'vencido') return venc && venc < hoje;
+    if (filtro === 'alta')    return div >= 1000;
+    return true;
+  });
+
+  lista.sort(function(a, b) { return parseBRNum(b.VAL_DIVIDA) - parseBRNum(a.VAL_DIVIDA); });
+  _FIN_FILTRADOS = lista;
+
+  var countEl = document.getElementById('fin-lista-count');
+  if (countEl) countEl.textContent = lista.length + ' aluno(s)';
+
+  var tbody = document.getElementById('fin-tabela-body');
+  if (!tbody) return;
+
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--text3)">Nenhum aluno encontrado para este filtro.</td></tr>';
+    atualizarSelCount();
+    return;
+  }
+
+  tbody.innerHTML = lista.map(function(r) {
+    var mat   = r.COD_MATRICULA;
+    var nome  = cap(r.NOM_ALUNO);
+    var curso = cap(r.NOM_CURSO).slice(0, 35);
+    var div   = fmtVal(r.VAL_DIVIDA);
+    var venc  = getVencimentoISO(r);
+    var vencFmt = venc ? (venc.slice(8,10)+'/'+venc.slice(5,7)+'/'+venc.slice(0,4)) : '—';
+    var isLate = venc && venc < hoje;
+    var isHoje = venc === hoje;
+    var statusHtml = isLate
+      ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#ffe3e3;color:#c92a2a;font-weight:600">⚠️ Vencida</span>'
+      : isHoje
+        ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#fff3bf;color:#e67700;font-weight:600">📌 Hoje</span>'
+        : venc
+          ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#e7f5ff;color:#1971c2;font-weight:600">🕐 A vencer</span>'
+          : '<span style="font-size:10px;color:var(--text3)">—</span>';
+    var vencStyle = isLate ? 'color:#c92a2a;font-weight:600' : isHoje ? 'color:#e67700;font-weight:600' : '';
+    var chk = _FIN_SELECTED.has(mat) ? 'checked' : '';
+    var c = (typeof CONTACTS !== 'undefined' && CONTACTS[mat]) ? CONTACTS[mat] : {};
+    var temWa    = !!(c.cel || r.NUM_TELEF_CELULAR || r.NUM_TELEFONE);
+    var temEmail = !!(c.email || r.END_EMAIL);
+    return '<tr>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border)"><input type="checkbox" ' + chk + ' onchange="toggleFinAluno(\'' + mat + '\',this.checked)"></td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600">' + nome + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-family:monospace;font-size:11px;color:var(--text2)">' + mat + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px">' + curso + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:700;color:#c92a2a">' + div + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border);' + vencStyle + '">' + vencFmt + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border)">' + statusHtml + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid var(--border)">' +
+        (temWa    ? '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px;margin-right:4px" onclick="abrirWaFinModal(\'' + mat + '\')">💬</button>' : '') +
+        (temEmail ? '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" onclick="abrirEmailFinModal(\'' + mat + '\')">✉️</button>' : '') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  atualizarSelCount();
+}
+
+function toggleFinAluno(mat, checked) {
+  if (checked) _FIN_SELECTED.add(mat);
+  else _FIN_SELECTED.delete(mat);
+  atualizarSelCount();
+}
+
+function selecionarTodosFinModal() {
+  _FIN_FILTRADOS.forEach(function(r) { _FIN_SELECTED.add(r.COD_MATRICULA); });
+  renderModalFinanceiro();
+}
+
+function deselecionarTodosFinModal() {
+  _FIN_SELECTED.clear();
+  renderModalFinanceiro();
+}
+
+function toggleTodosFinModal(checked) {
+  if (checked) selecionarTodosFinModal();
+  else deselecionarTodosFinModal();
+}
+
+function atualizarSelCount() {
+  var el = document.getElementById('fin-sel-count');
+  if (el) el.textContent = _FIN_SELECTED.size;
+  var chkAll = document.getElementById('fin-check-all');
+  if (chkAll) chkAll.checked = _FIN_FILTRADOS.length > 0 && _FIN_SELECTED.size >= _FIN_FILTRADOS.length;
+}
+
+function subVarsFin(tpl, r, atend) {
+  var nome  = cap(r.NOM_ALUNO || '').split(' ')[0];
+  var div   = fmtVal(r.VAL_DIVIDA);
+  var venc  = getVencimentoISO(r);
+  var prazo = venc ? (venc.slice(8,10)+'/'+venc.slice(5,7)+'/'+venc.slice(0,4)) : '';
+  return (tpl || '')
+    .replace(/\{nome\}/gi, nome)
+    .replace(/\{nomecompleto\}/gi, cap(r.NOM_ALUNO || ''))
+    .replace(/\{curso\}/gi, cap(r.NOM_CURSO || ''))
+    .replace(/\{matricula\}/gi, r.COD_MATRICULA || '')
+    .replace(/\{divida\}/gi, div)
+    .replace(/\{valor\}/gi, div)
+    .replace(/\{prazo\}/gi, prazo)
+    .replace(/\{atendente\}/gi, atend || '');
+}
+
+function abrirWaFinModal(mat) {
+  var r = DB.find(function(x) { return x.COD_MATRICULA === mat; });
+  if (!r) return;
+  var c = (typeof CONTACTS !== 'undefined' && CONTACTS[mat]) ? CONTACTS[mat] : {};
+  var tel = (c.cel || r.NUM_TELEF_CELULAR || r.NUM_TELEFONE || '').replace(/\D/g,'');
+  if (!tel) { showToast('Nenhum telefone encontrado.'); return; }
+  var atend = (document.getElementById('fin-atend-sel') || {}).value || '';
+  var tpl   = (document.getElementById('fin-msg-template') || {}).value || '';
+  var msg   = subVarsFin(tpl || 'Olá {nome}, identificamos uma pendência de {divida} no seu curso {curso}. Entre em contato! — {atendente}', r, atend);
+  var waNum = tel.startsWith('55') ? tel : '55' + tel;
+  window.open('https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+function abrirEmailFinModal(mat) {
+  var r = DB.find(function(x) { return x.COD_MATRICULA === mat; });
+  if (!r) return;
+  var c = (typeof CONTACTS !== 'undefined' && CONTACTS[mat]) ? CONTACTS[mat] : {};
+  var email = c.email || r.END_EMAIL || '';
+  if (!email) { showToast('Nenhum e-mail encontrado.'); return; }
+  var atend = (document.getElementById('fin-atend-sel') || {}).value || '';
+  var tpl   = (document.getElementById('fin-msg-template') || {}).value || '';
+  var msg   = subVarsFin(tpl, r, atend);
+  window.open('mailto:' + email + '?subject=' + encodeURIComponent('[Estácio] Pendência Financeira — ' + cap(r.NOM_CURSO || '')) + '&body=' + encodeURIComponent(msg), '_blank');
+}
+
+async function dispararLoteFinanceiro() {
+  if (_FIN_SELECTED.size === 0) { showToast('Selecione ao menos um aluno.'); return; }
+  var atend = (document.getElementById('fin-atend-sel') || {}).value || '';
+  var canal = (document.getElementById('fin-canal-sel') || {}).value || 'E-mail';
+  var tpl   = (document.getElementById('fin-msg-template') || {}).value || '';
+  if (!atend) { showToast('Selecione um atendente antes de disparar.'); return; }
+  if (!tpl)   { showToast('Digite a mensagem antes de disparar.'); return; }
+
+  var alunos = Array.from(_FIN_SELECTED).map(function(mat) {
+    return DB.find(function(x) { return x.COD_MATRICULA === mat; });
+  }).filter(Boolean);
+
+  var semContato = [], enviados = 0;
+  alunos.forEach(function(r) {
+    var c = (typeof CONTACTS !== 'undefined' && CONTACTS[r.COD_MATRICULA]) ? CONTACTS[r.COD_MATRICULA] : {};
+    var msg = subVarsFin(tpl, r, atend);
+    if (canal === 'WhatsApp') {
+      var tel = (c.cel || r.NUM_TELEF_CELULAR || r.NUM_TELEFONE || '').replace(/\D/g,'');
+      if (!tel) { semContato.push(cap(r.NOM_ALUNO || '')); return; }
+      var waNum = tel.startsWith('55') ? tel : '55' + tel;
+      window.open('https://wa.me/' + waNum + '?text=' + encodeURIComponent(msg), '_blank');
+    } else {
+      var email = c.email || r.END_EMAIL || '';
+      if (!email) { semContato.push(cap(r.NOM_ALUNO || '')); return; }
+      window.open('mailto:' + email + '?subject=' + encodeURIComponent('[Estácio] Pendência Financeira — ' + cap(r.NOM_CURSO || '')) + '&body=' + encodeURIComponent(msg), '_blank');
+    }
+    enviados++;
+    if (!HISTORY[r.COD_MATRICULA]) HISTORY[r.COD_MATRICULA] = [];
+    HISTORY[r.COD_MATRICULA].push({
+      data: new Date().toLocaleDateString('pt-BR'), canal: canal,
+      motivo: 'financeiro', obs: 'Disparo financeiro em lote',
+      atend: atend, nomeAluno: r.NOM_ALUNO
+    });
+  });
+
+  var cfg = BASE_CONFIG[ACTIVE_BASE];
+  await STORE.set(cfg.storageH, HISTORY).catch(function(){});
+  try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+  if (typeof GAS_URL !== 'undefined' && GAS_URL && enviados > 0) {
+    var semSet = new Set(semContato);
+    var entries = alunos.filter(function(r) { return !semSet.has(cap(r.NOM_ALUNO || '')); }).map(function(r) {
+      return { COD_MATRICULA: r.COD_MATRICULA, NOM_ALUNO: r.NOM_ALUNO, canal: canal,
+               motivo: 'financeiro', obs: 'Disparo financeiro em lote', atend: atend,
+               data: new Date().toLocaleDateString('pt-BR') };
+    });
+    if (entries.length) gasCall('saveActionLote', { entries: entries, base: ACTIVE_BASE }).catch(function(){});
+  }
+
+  var msg2 = '✅ ' + enviados + ' disparos realizados.';
+  if (semContato.length) msg2 += ' ⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,3).join(', ') + (semContato.length > 3 ? '…' : '');
+  showToast(msg2);
+  if (typeof applyFilters === 'function') applyFilters();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+function exportarInadimplentesXLSX() {
+  if (typeof XLSX === 'undefined') { showToast('Biblioteca XLSX não carregada.'); return; }
+  var lista = _FIN_FILTRADOS.length ? _FIN_FILTRADOS : (DB || []).filter(function(r) { return r.INADIMPLENTE == 1; });
+  var hoje = todayStr();
+  var rows = lista.map(function(r) {
+    var venc = getVencimentoISO(r);
+    var c = (typeof CONTACTS !== 'undefined' && CONTACTS[r.COD_MATRICULA]) ? CONTACTS[r.COD_MATRICULA] : {};
+    return {
+      'Matrícula':        r.COD_MATRICULA,
+      'Nome':             cap(r.NOM_ALUNO || ''),
+      'Curso':            cap(r.NOM_CURSO || ''),
+      'Dívida (R$)':      parseBRNum(r.VAL_DIVIDA),
+      'Faixa':            r.FAIXA_DIVIDA || '',
+      'Vencimento':       venc ? (venc.slice(8,10)+'/'+venc.slice(5,7)+'/'+venc.slice(0,4)) : '',
+      'Status':           venc ? (venc < hoje ? 'Vencida' : venc === hoje ? 'Vence hoje' : 'A vencer') : 'Sem data',
+      'Celular':          c.cel || r.NUM_TELEF_CELULAR || '',
+      'E-mail':           c.email || r.END_EMAIL || '',
+      'Tipo Inadimplência': r.TIPO_INADIMPLENCIA || ''
+    };
+  });
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inadimplentes');
+  XLSX.writeFile(wb, 'inadimplentes_' + hoje + '.xlsx');
+  showToast('✅ XLSX exportado!');
+}
+
+// ========== RELATÓRIO DE ATENDENTES ==========
+function abrirRelatorioAtendentes() {
+  var overlay = document.getElementById('rel-atend-overlay');
+  if (!overlay) { showToast('Modal de relatório não encontrado.'); return; }
+  // Popular select de atendente
+  var selRel = document.getElementById('rel-atend-filtro');
+  if (selRel) {
+    selRel.innerHTML = '<option value="">Todos os atendentes</option>' +
+      ATENDENTES.map(function(a) { return '<option value="' + a + '">' + a + '</option>'; }).join('');
+  }
+  renderRelatorioAtendentes();
+  overlay.style.display = 'flex';
+}
+
+function fecharRelatorioAtendentes() {
+  var overlay = document.getElementById('rel-atend-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function renderRelatorioAtendentes() {
+  var periodo     = parseInt((document.getElementById('rel-periodo') || {}).value || '30');
+  var atendFiltro = (document.getElementById('rel-atend-filtro') || {}).value || '';
+  var corte = new Date(); corte.setDate(corte.getDate() - periodo);
+
+  var statsMap = {};
+  function processBase(hist) {
+    Object.keys(hist).forEach(function(mat) {
+      var acs = hist[mat];
+      if (!Array.isArray(acs)) return;
+      acs.forEach(function(ac) {
+        var atend = ac.atend || ac.atendente || 'Sem atendente';
+        if (atendFiltro && atend !== atendFiltro) return;
+        var dataStr = ac.data || ac.date || '';
+        if (dataStr) {
+          var partes = dataStr.split('/');
+          var dAc = partes.length === 3 ? new Date(partes[2], partes[1]-1, partes[0]) : new Date(dataStr);
+          if (!isNaN(dAc.getTime()) && dAc < corte) return;
+        }
+        if (!statsMap[atend]) statsMap[atend] = { total:0, financeiro:0, trancamento:0, motivos:{}, canais:{}, alunos:new Set() };
+        var s = statsMap[atend];
+        s.total++;
+        s.alunos.add(mat);
+        var motivo = (ac.motivo || '').toLowerCase();
+        if (motivo === 'financeiro' || motivo.indexOf('inadim') >= 0) s.financeiro++;
+        if (motivo === 'trancamento' || motivo === 'cancelamento') s.trancamento++;
+        s.motivos[ac.motivo || 'S/D'] = (s.motivos[ac.motivo || 'S/D'] || 0) + 1;
+        s.canais[ac.canal || 'S/D'] = (s.canais[ac.canal || 'S/D'] || 0) + 1;
+      });
+    });
+  }
+
+  processBase(HISTORY || {});
+  Object.keys(BASE_CONFIG).forEach(function(bk) {
+    if (bk === ACTIVE_BASE) return;
+    try {
+      var raw = localStorage.getItem(BASE_CONFIG[bk].storageH);
+      if (raw) processBase(JSON.parse(raw));
+    } catch(e) {}
+  });
+
+  var atendentes = Object.keys(statsMap).sort(function(a,b) { return statsMap[b].total - statsMap[a].total; });
+  var tbody = document.getElementById('rel-tbody');
+  if (!tbody) return;
+
+  if (!atendentes.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text3)">Nenhum acionamento encontrado no período.</td></tr>';
+    setText('rel-resumo', '');
+    return;
+  }
+
+  tbody.innerHTML = atendentes.map(function(atend) {
+    var s = statsMap[atend];
+    var topMotivos = Object.entries(s.motivos).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0]+'('+e[1]+')'}).join(', ');
+    var topCanais  = Object.entries(s.canais).sort(function(a,b){return b[1]-a[1];}).map(function(e){return e[0]+':'+e[1]}).join(', ');
+    return '<tr>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);font-weight:600">' + atend + '</td>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);text-align:center;font-weight:700">' + s.total + '</td>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);text-align:center">' + s.alunos.size + '</td>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);text-align:center;color:#c92a2a;font-weight:600">' + s.financeiro + '</td>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);text-align:center;color:#e67700;font-weight:600">' + s.trancamento + '</td>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)">' + topMotivos + '</td>' +
+      '<td style="padding:9px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)">' + topCanais + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var totalGeral  = atendentes.reduce(function(s,a){return s + statsMap[a].total;}, 0);
+  var alunosUnicos = new Set(atendentes.reduce(function(arr,a){return arr.concat(Array.from(statsMap[a].alunos));},[])).size;
+  var finGeral    = atendentes.reduce(function(s,a){return s + statsMap[a].financeiro;}, 0);
+  var trancGeral  = atendentes.reduce(function(s,a){return s + statsMap[a].trancamento;}, 0);
+  setText('rel-resumo', totalGeral + ' acionamentos · ' + alunosUnicos + ' alunos únicos · ' + finGeral + ' financeiros · ' + trancGeral + ' trancamentos');
+}
+
+function exportarRelatorioXLSX() {
+  if (typeof XLSX === 'undefined') { showToast('Biblioteca XLSX não carregada.'); return; }
+  var periodo = parseInt((document.getElementById('rel-periodo') || {}).value || '30');
+  var corte = new Date(); corte.setDate(corte.getDate() - periodo);
+  var rows = [];
+
+  function processBase2(hist, baseLabel) {
+    Object.keys(hist).forEach(function(mat) {
+      var acs = hist[mat];
+      if (!Array.isArray(acs)) return;
+      var r = (DB || []).find(function(x){return x.COD_MATRICULA===mat;}) || {};
+      acs.forEach(function(ac) {
+        var dataStr = ac.data || ac.date || '';
+        if (dataStr) {
+          var partes = dataStr.split('/');
+          var dAc = partes.length === 3 ? new Date(partes[2], partes[1]-1, partes[0]) : new Date(dataStr);
+          if (!isNaN(dAc.getTime()) && dAc < corte) return;
+        }
+        rows.push({
+          'Base':         baseLabel,
+          'Data':         dataStr,
+          'Atendente':    ac.atend || ac.atendente || '',
+          'Matrícula':    mat,
+          'Aluno':        cap(r.NOM_ALUNO || ac.nomeAluno || ''),
+          'Curso':        cap(r.NOM_CURSO || ''),
+          'Canal':        ac.canal || '',
+          'Motivo':       ac.motivo || '',
+          'Observação':   ac.obs || '',
+          'Inadimplente': r.INADIMPLENTE == 1 ? 'Sim' : 'Não',
+          'Dívida (R$)':  parseBRNum(r.VAL_DIVIDA || '0')
+        });
+      });
+    });
+  }
+
+  processBase2(HISTORY || {}, BASE_CONFIG[ACTIVE_BASE] ? BASE_CONFIG[ACTIVE_BASE].label : '');
+  Object.keys(BASE_CONFIG).forEach(function(bk) {
+    if (bk === ACTIVE_BASE) return;
+    try {
+      var raw = localStorage.getItem(BASE_CONFIG[bk].storageH);
+      if (raw) processBase2(JSON.parse(raw), BASE_CONFIG[bk].label);
+    } catch(e) {}
+  });
+
+  if (!rows.length) { showToast('Nenhum dado para exportar no período.'); return; }
+  var ws = XLSX.utils.json_to_sheet(rows);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Acionamentos');
+  XLSX.writeFile(wb, 'relatorio_atendentes_' + todayStr() + '.xlsx');
+  showToast('✅ Relatório exportado com ' + rows.length + ' registros!');
+}
+
 </script>
 
 <!-- ADMIN / ZONA DE PERIGO -->
@@ -6647,6 +7165,93 @@ function importarEventos(input) {
       </div>
     </div>
   </div>
+
+<!-- ===== MODAL FINANCEIRO ===== -->
+<div class="ev-modal-overlay" id="fin-modal-overlay" style="display:none" onclick="if(event.target===this)fecharModalFinanceiro()">
+  <div class="ev-modal-box" style="max-width:900px;width:96%;max-height:92vh;overflow-y:auto">
+    <div class="ev-modal-header">
+      <h3>💰 Controle Financeiro — Inadimplência</h3>
+      <button class="btn btn-sm" onclick="fecharModalFinanceiro()">✕ Fechar</button>
+    </div>
+    <div style="padding:0 18px 18px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:#fff9db;border:1px solid #ffd43b;border-radius:8px;padding:12px 14px;text-align:center;cursor:pointer" onclick="filtrarFinModal('vencer')">
+          <div style="font-size:22px;font-weight:800;color:#854f0b" id="fin-cnt-vencer">0</div>
+          <div style="font-size:11px;font-weight:700;color:#854f0b;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">A Vencer</div>
+          <div style="font-size:10px;color:#997a00;margin-top:2px">próximos 5 dias</div>
+        </div>
+        <div style="background:#fff3bf;border:2px solid #f59f00;border-radius:8px;padding:12px 14px;text-align:center;cursor:pointer" onclick="filtrarFinModal('hoje')">
+          <div style="font-size:22px;font-weight:800;color:#e67700" id="fin-cnt-hoje">0</div>
+          <div style="font-size:11px;font-weight:700;color:#e67700;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Vencem Hoje</div>
+          <div style="font-size:10px;color:#e67700;margin-top:2px">ação imediata</div>
+        </div>
+        <div style="background:#fff5f5;border:1px solid #ffc9c9;border-radius:8px;padding:12px 14px;text-align:center;cursor:pointer" onclick="filtrarFinModal('vencido')">
+          <div style="font-size:22px;font-weight:800;color:#c92a2a" id="fin-cnt-vencido">0</div>
+          <div style="font-size:11px;font-weight:700;color:#c92a2a;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Vencidas</div>
+          <div style="font-size:10px;color:#c92a2a;margin-top:2px">em cobrança</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <select id="fin-filtro-tipo" onchange="renderModalFinanceiro()" style="height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
+          <option value="todos">Todos inadimplentes</option>
+          <option value="vencer">A vencer (5 dias)</option>
+          <option value="hoje">Vencendo hoje</option>
+          <option value="vencido">Vencidas</option>
+          <option value="alta">Dívida alta (&gt; R$1.000)</option>
+        </select>
+        <input type="text" id="fin-busca" placeholder="🔍 buscar aluno..." oninput="renderModalFinanceiro()" style="height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;flex:1;min-width:140px;background:var(--surface)">
+        <button class="btn btn-sm" onclick="selecionarTodosFinModal()">☑️ Selec. todos</button>
+        <button class="btn btn-sm" onclick="deselecionarTodosFinModal()">✗ Limpar</button>
+        <span id="fin-lista-count" style="font-size:11px;color:var(--text3)"></span>
+      </div>
+      <div style="overflow-x:auto;max-height:310px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--surface2);position:sticky;top:0;z-index:1">
+              <th style="padding:8px 10px;border-bottom:1px solid var(--border)"><input type="checkbox" id="fin-check-all" onchange="toggleTodosFinModal(this.checked)" title="Selecionar todos"></th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase">Aluno</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase">Matrícula</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase">Curso</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase">Dívida</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase">Vencimento</th>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase">Status</th>
+              <th style="padding:8px 10px;border-bottom:1px solid var(--border)"></th>
+            </tr>
+          </thead>
+          <tbody id="fin-tabela-body">
+            <tr><td colspan="8" style="padding:20px;text-align:center;color:var(--text3)">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📨 Ação em lote — <span id="fin-sel-count">0</span> aluno(s) selecionado(s)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px">Atendente</label>
+            <select id="fin-atend-sel" style="width:100%;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)">
+              <option value="">— selecione —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px">Canal</label>
+            <select id="fin-canal-sel" style="width:100%;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="atualizarTemplateFin()">
+              <option value="E-mail">✉️ E-mail</option>
+              <option value="WhatsApp">💬 WhatsApp</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px">Mensagem <span style="font-weight:400;color:var(--text3)">(variáveis: {nome}, {curso}, {divida}, {prazo}, {atendente})</span></label>
+          <textarea id="fin-msg-template" rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);resize:vertical;font-family:inherit;line-height:1.5;box-sizing:border-box" placeholder="Ex: Olá {nome}, identificamos uma pendência financeira no seu curso {curso}. Valor: {divida}. Entre em contato para regularizar."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-sm btn-primary" onclick="dispararLoteFinanceiro()" style="flex:1">📨 Disparar para selecionados</button>
+          <button class="btn btn-sm" onclick="exportarInadimplentesXLSX()">📥 Exportar XLSX</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="ev-modal-overlay" id="ev-modal-overlay" style="display:none" onclick="if(event.target===this)fecharEvModal()">
     <div class="ev-modal-box">
@@ -6827,5 +7432,67 @@ function importarEventos(input) {
       </div>
     </div>
   </div>
+
+<!-- ===== MODAL RELATÓRIO DE ATENDENTES ===== -->
+<div class="ev-modal-overlay" id="rel-atend-overlay" style="display:none" onclick="if(event.target===this)fecharRelatorioAtendentes()">
+  <div class="ev-modal-box" style="max-width:960px;width:96%;max-height:92vh;overflow-y:auto">
+    <div class="ev-modal-header">
+      <h3>📊 Relatório de Atendentes</h3>
+      <button class="btn btn-sm" onclick="fecharRelatorioAtendentes()">✕ Fechar</button>
+    </div>
+    <div style="padding:0 18px 18px">
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding:14px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+        <div style="flex:1;min-width:140px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Período</label>
+          <select id="rel-periodo" class="search-input" onchange="renderRelatorioAtendentes()" style="width:100%">
+            <option value="7">Últimos 7 dias</option>
+            <option value="15">Últimos 15 dias</option>
+            <option value="30" selected>Últimos 30 dias</option>
+            <option value="60">Últimos 60 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="9999">Todo o histórico</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:180px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente</label>
+          <select id="rel-atend-filtro" class="search-input" onchange="renderRelatorioAtendentes()" style="width:100%">
+            <option value="">Todos os atendentes</option>
+          </select>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="exportarRelatorioXLSX()" style="height:36px">⬇️ Exportar XLSX</button>
+      </div>
+
+      <!-- Resumo -->
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:12px;padding:8px 12px;background:var(--accent-bg);border-radius:6px" id="rel-resumo"></div>
+
+      <!-- Tabela -->
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--surface)">
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Atendente</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Acionamentos</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Alunos únicos</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#c92a2a">💰 Financeiro</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#e67700">⚠️ Trancamento</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Top motivos</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Canais</th>
+            </tr>
+          </thead>
+          <tbody id="rel-tbody">
+            <tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text3)">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:14px;font-size:11px;color:var(--text3);text-align:center">
+        Os dados são consolidados de todas as bases carregadas no navegador. Exporte para XLSX para análise detalhada por aluno.
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
