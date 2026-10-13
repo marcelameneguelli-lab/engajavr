@@ -424,6 +424,20 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .lote-result.ok{background:#ebfbee;color:#276b35}
 .lote-result.err{background:#fff5f5;color:#c92a2a}
 
+.lote-mala-panel{display:none;padding:16px 0 0;border-top:1px solid var(--border);margin-top:14px}
+.lote-mala-panel.ativo{display:block}
+.lote-mala-ok{background:#ebfbee;border:1px solid #8ce99a;border-radius:8px;padding:10px 14px;font-size:13px;color:#276b35;font-weight:600;margin-bottom:12px}
+.lote-mala-ok span{font-size:11px;font-weight:400;color:#2f9e44;display:block;margin-top:2px}
+.lote-mala-como{font-size:13px;font-weight:700;color:var(--text1);margin-bottom:8px}
+.lote-mala-steps{list-style:decimal;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.9;margin-bottom:12px}
+.lote-mala-steps li b{color:var(--text1)}
+.lote-mala-assunto-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.lote-mala-assunto-row{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+.lote-mala-assunto-input{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)}
+.lote-mala-warn{background:#fff9db;border:1px solid #ffe066;border-radius:6px;padding:7px 10px;font-size:11px;color:#856404;margin-bottom:10px}
+.lote-mala-info{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:12px}
+.lote-mala-footer{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+
 /* ====== CALENDÁRIO ACADÊMICO — GRADE MENSAL ====== */
 .cal-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
 .cal-toolbar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
@@ -512,6 +526,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="EngajaVR">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -5687,6 +5702,14 @@ function abrirLoteModal(titulo) {
 
 function fecharLote() {
   document.getElementById('lote-overlay').style.display = 'none';
+  // Reset painel mala direta
+  var malaPanel = document.getElementById('lote-mala-panel');
+  var footerNormal = document.getElementById('lote-footer-normal');
+  var resEl = document.getElementById('lote-result');
+  if (malaPanel) malaPanel.classList.remove('ativo');
+  if (footerNormal) footerNormal.style.display = '';
+  if (resEl) { resEl.style.display = ''; resEl.textContent = ''; resEl.className = 'lote-result'; }
+  _LOTE_EMAIL_LIST = []; _LOTE_ENTRIES_PENDENTES = []; _LOTE_XLSX_BLOB = null;
 }
 
 function atualizarPreviewLote() {
@@ -5714,22 +5737,20 @@ async function executarLote(canal) {
   var atend  = document.getElementById('lote-atend').value.trim();
   var motivo = document.getElementById('lote-motivo').value;
   var canalSel = document.getElementById('lote-canal').value;
-  // Usar o canal do select se não foi passado explicitamente
   if (!canal || canal === '') canal = canalSel;
   var obs    = document.getElementById('lote-obs').value.trim();
   var resEl  = document.getElementById('lote-result');
+  var footerNormal = document.getElementById('lote-footer-normal');
+  var malaPanel = document.getElementById('lote-mala-panel');
 
   if (!atend)  { resEl.className='lote-result err'; resEl.textContent='Informe o atendente.'; return; }
   if (!motivo) { resEl.className='lote-result err'; resEl.textContent='Selecione o motivo.'; return; }
   if (!canal)  { resEl.className='lote-result err'; resEl.textContent='Selecione o canal.'; return; }
   if (!LOTE_ALUNOS || !LOTE_ALUNOS.length) { resEl.className='lote-result err'; resEl.textContent='Nenhum aluno selecionado.'; return; }
 
-  // Mostrar progresso — usar setTimeout para garantir render antes do loop
-  resEl.className='lote-result';
-  resEl.style.display='block';
+  resEl.className='lote-result'; resEl.style.display='block';
   resEl.textContent = '⏳ Processando ' + LOTE_ALUNOS.length + ' alunos...';
-  await new Promise(function(res){ setTimeout(res, 50); }); // aguarda 1 frame de render
-
+  await new Promise(function(res){ setTimeout(res, 50); });
 
   localStorage.setItem('crm_last_atend', atend);
 
@@ -5737,10 +5758,11 @@ async function executarLote(canal) {
   var now = new Date();
   var datetime = now.toLocaleString('pt-BR');
   var date     = now.toLocaleDateString('pt-BR');
+  var hoje     = now.toLocaleDateString('pt-BR').replace(/\//g,'-');
 
-  // Registrar acionamento para cada aluno + coletar dados para exportação
-  var rows = []; // para CSV WhatsApp
-  var emailList = []; // para e-mail
+  var rows = [];
+  var emailList = [];
+  var loteEntries = [];
 
   for (var i = 0; i < LOTE_ALUNOS.length; i++) {
     var r = LOTE_ALUNOS[i];
@@ -5749,13 +5771,11 @@ async function executarLote(canal) {
     var email = c.email  || r.END_EMAIL || '';
     var msg   = buildMessage(r, motivo, canal) || '';
 
-    // Verificar contato
     if (canal === 'WhatsApp' && !tel)   { semContato.push(r.NOM_ALUNO); continue; }
     if (canal === 'E-mail'   && !email) { semContato.push(r.NOM_ALUNO); continue; }
     if (!msg) { semMsg.push(r.NOM_ALUNO); continue; }
 
-    // Para e-mail: separar assunto do corpo se vier junto
-    var emailSubj = 'Estácio Volta Redonda — ' + (motivo === 'financeiro' ? 'Pendência Financeira' : 'Acompanhamento Acadêmico');
+    var emailSubj = '[Estácio] ' + (motivo === 'financeiro' ? 'Pendência Financeira — {curso}' : 'Acompanhamento Acadêmico — {curso}');
     var emailBody = msg;
     if (msg.startsWith('Assunto:')) {
       var lines = msg.split('\n');
@@ -5763,7 +5783,6 @@ async function executarLote(canal) {
       emailBody = lines.slice(1).join('\n').trim();
     }
 
-    // Registrar acionamento
     if (!HISTORY[r.COD_MATRICULA]) HISTORY[r.COD_MATRICULA] = [];
     var entry = {
       datetime: datetime, date: date,
@@ -5773,87 +5792,172 @@ async function executarLote(canal) {
       matricula: r.COD_MATRICULA,
       base: ACTIVE_BASE
     };
-    HISTORY[r.COD_MATRICULA].push(entry);
-    // Não dispara saveAction individual aqui — será feito em lote abaixo
 
     comSucesso.push(r.NOM_ALUNO);
 
     if (canal === 'WhatsApp') {
+      // WhatsApp: registra imediatamente
+      HISTORY[r.COD_MATRICULA].push(entry);
+      loteEntries.push(entry);
       var waNum = tel.startsWith('55') ? tel : '55' + tel;
       rows.push({ nome: cap(r.NOM_ALUNO), numero: waNum, mensagem: msg, matricula: r.COD_MATRICULA, curso: r.NOM_CURSO });
     }
     if (canal === 'E-mail') {
-      emailList.push({ email: email, nome: cap(r.NOM_ALUNO), msg: emailBody, subj: emailSubj, matricula: r.COD_MATRICULA });
+      // E-mail: guarda pendente até "Registrar como enviados"
+      HISTORY[r.COD_MATRICULA].push(entry);
+      loteEntries.push(entry);
+      emailList.push({ email: email, nome: cap(r.NOM_ALUNO), msg: emailBody, subj: emailSubj, matricula: r.COD_MATRICULA, curso: cap(r.NOM_CURSO) });
     }
   }
 
-  // Salvar history — STORE + localStorage direto como garantia
+  // ── WhatsApp: salvar e fechar ──
+  if (canal === 'WhatsApp') {
+    var cfg = BASE_CONFIG[ACTIVE_BASE];
+    await STORE.set(cfg.storageH, HISTORY);
+    try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+    if (GAS_URL && loteEntries.length > 0) gasCall('saveActionLote', { entries: loteEntries, base: ACTIVE_BASE }).catch(function(){});
+
+    if (rows.length > 0) {
+      var bom = '\uFEFF';
+      var csv = bom + 'MATRICULA;NOME;NUMERO;MENSAGEM;CURSO\n' +
+        rows.map(function(row) {
+          var m2 = row.mensagem.replace(/"/g,'""');
+          return row.matricula+';'+row.nome+';'+row.numero+';"'+m2+'";'+row.curso;
+        }).join('\n');
+      var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'disparo-whatsapp-' + hoje + '-' + rows.length + 'alunos.csv';
+      a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
+    var txt = '✅ ' + comSucesso.length + ' acionamentos registrados. CSV exportado com ' + rows.length + ' números.';
+    if (semContato.length) txt += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
+    resEl.className = 'lote-result ok'; resEl.textContent = txt;
+    return;
+  }
+
+  // ── E-mail: gerar XLSX mala direta e mostrar painel de instruções ──
+  if (canal === 'E-mail' && emailList.length > 0) {
+    // Guardar pendências para registro tardio
+    _LOTE_EMAIL_LIST = emailList;
+    _LOTE_ENTRIES_PENDENTES = loteEntries;
+
+    // Gerar XLSX
+    var xlsxResult = gerarXlsxMalaDireta(emailList);
+    _LOTE_XLSX_BLOB = xlsxResult;
+    var nomeArquivo = 'mala_direta_' + hoje + '_' + emailList.length + 'alunos.' + xlsxResult.ext;
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(xlsxResult.blob);
+    a.download = nomeArquivo; a.click(); URL.revokeObjectURL(a.href);
+
+    // Preencher painel
+    var assuntoBase = emailList[0] ? emailList[0].subj : '[Estácio] Mensagem';
+    document.getElementById('lote-mala-nome-arquivo').textContent = '✅ Planilha gerada: ' + nomeArquivo;
+    document.getElementById('lote-mala-subtitulo').textContent = emailList.length + ' alunos. Ela está na pasta Downloads.';
+    document.getElementById('lote-mala-assunto').value = assuntoBase;
+
+    // Esconder footer normal e mostrar painel
+    resEl.style.display = 'none';
+    if (footerNormal) footerNormal.style.display = 'none';
+    if (malaPanel) malaPanel.classList.add('ativo');
+    return;
+  }
+
+  // ── Outros canais (Ligação, Presencial) ──
+  var cfg2 = BASE_CONFIG[ACTIVE_BASE];
+  await STORE.set(cfg2.storageH, HISTORY);
+  try { localStorage.setItem(cfg2.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+  if (GAS_URL && loteEntries.length > 0) gasCall('saveActionLote', { entries: loteEntries, base: ACTIVE_BASE }).catch(function(){});
+  applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
+  var txt2 = '✅ ' + comSucesso.length + ' acionamentos registrados.';
+  if (semContato.length) txt2 += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
+  resEl.className = 'lote-result ok'; resEl.textContent = txt2;
+}
+
+
+// ================================================================
+// MALA DIRETA — E-MAIL EM LOTE VIA WORD
+// ================================================================
+var _LOTE_EMAIL_LIST = []; // cache para "baixar de novo" e registro tardio
+var _LOTE_ENTRIES_PENDENTES = []; // acionamentos aguardando "registrar como enviados"
+var _LOTE_XLSX_BLOB = null; // blob para re-download
+
+function gerarXlsxMalaDireta(emailList) {
+  // Monta dados para a aba MalaDireta
+  var rows = emailList.map(function(e) {
+    return {
+      MATRICULA: e.matricula,
+      NOME: e.nome,
+      EMAIL: e.email,
+      ASSUNTO: e.subj,
+      MENSAGEM: e.msg
+    };
+  });
+
+  if (typeof XLSX === 'undefined') {
+    // fallback: CSV com extensão csv
+    var csv = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
+      emailList.map(function(e) {
+        var b = e.msg.replace(/"/g,'""');
+        return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + b + '"';
+      }).join('\n');
+    return { blob: new Blob([csv], {type:'text/csv;charset=utf-8'}), ext: 'csv' };
+  }
+
+  var ws = XLSX.utils.json_to_sheet(rows);
+  // Largura das colunas
+  ws['!cols'] = [
+    {wch:14},{wch:32},{wch:36},{wch:60},{wch:100}
+  ];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'MalaDireta');
+  var wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  return { blob: new Blob([wbout], {type:'application/octet-stream'}), ext: 'xlsx' };
+}
+
+function baixarMalaDiretoNovamente() {
+  if (!_LOTE_XLSX_BLOB) return;
+  var hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(_LOTE_XLSX_BLOB.blob);
+  a.download = 'mala_direta_' + hoje + '_' + _LOTE_EMAIL_LIST.length + 'alunos.' + _LOTE_XLSX_BLOB.ext;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function copiarAssuntoLote() {
+  var el = document.getElementById('lote-mala-assunto');
+  if (!el) return;
+  navigator.clipboard ? navigator.clipboard.writeText(el.value) : (el.select(), document.execCommand('copy'));
+  var btn = el.nextElementSibling;
+  if (btn) { var t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(function(){ btn.textContent = t; }, 1500); }
+}
+
+async function registrarEnviadosLote() {
+  if (!_LOTE_ENTRIES_PENDENTES.length) { fecharLote(); return; }
+  var btn = document.querySelector('#lote-mala-panel .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
+
+  // Salvar history local
   var cfg = BASE_CONFIG[ACTIVE_BASE];
   await STORE.set(cfg.storageH, HISTORY);
   try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
-  // Enviar ao GAS em lote (um único call)
-  if (GAS_URL && comSucesso.length > 0) {
-    var loteEntries = LOTE_ALUNOS
-      .filter(function(r2) { return comSucesso.includes(r2.NOM_ALUNO); })
-      .map(function(r2) {
-        return HISTORY[r2.COD_MATRICULA] ? HISTORY[r2.COD_MATRICULA][HISTORY[r2.COD_MATRICULA].length-1] : null;
-      }).filter(Boolean);
-    if (loteEntries.length > 0) {
-      gasCall('saveActionLote', { entries: loteEntries, base: ACTIVE_BASE }).catch(function(){});
-    }
+
+  // Enviar ao GAS em lote
+  if (GAS_URL && _LOTE_ENTRIES_PENDENTES.length > 0) {
+    gasCall('saveActionLote', { entries: _LOTE_ENTRIES_PENDENTES, base: ACTIVE_BASE }).catch(function(){});
   }
 
-  // Exportar CSV para WhatsApp
-  if (canal === 'WhatsApp' && rows.length > 0) {
-    var bom = '\uFEFF';
-    var header = 'MATRICULA;NOME;NUMERO;MENSAGEM;CURSO';
-    var body = rows.map(function(row) {
-      var msg2 = row.mensagem.replace(/"/g,'""');
-      return row.matricula + ';' + row.nome + ';' + row.numero + ';"' + msg2 + '";' + row.curso;
-    }).join('\n');
-    var csv = bom + header + '\n' + body;
-    var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
-    a.href = url;
-    a.download = 'disparo-whatsapp-' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '-' + rows.length + 'alunos.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  // Para e-mail: apenas gerar CSV para uso com a macro VBA (EnviarEmailsLote.bas)
-  // Não abrir mailto: individual — evita travar com muitos alunos
-  if (canal === 'E-mail' && emailList.length > 0) {
-    var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
-      emailList.map(function(e) {
-        var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
-        return e.matricula + ';' + e.nome + ';' + e.email + ';"' + e.subj + '";"' + bodyClean + '"';
-      }).join('\n');
-    var csvBlob = new Blob([emailCSV], {type:'text/csv;charset=utf-8'});
-    var csvUrl = URL.createObjectURL(csvBlob);
-    var csvLink = document.createElement('a');
-    csvLink.href = csvUrl;
-    csvLink.download = 'emails-lote-' + emailList.length + '.csv';
-    csvLink.click();
-    URL.revokeObjectURL(csvUrl);
-  }
-
-  // Atualizar UI
-  applyFilters();
-  renderDashboard();
-  renderProdutividade();
-  updatePriorityCounts();
-  limparSelecao();
-
-  // Resultado
-  var txt = '✅ ' + comSucesso.length + ' acionamentos registrados.';
-  if (canal === 'WhatsApp') txt += ' CSV exportado com ' + rows.length + ' números.';
-  if (canal === 'E-mail')   txt += ' CSV com ' + emailList.length + ' destinatários gerado — use a macro VBA para envio.';
-  if (semContato.length) txt += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
-  resEl.className = 'lote-result ok';
-  resEl.textContent = txt;
+  applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
+  fecharLote();
 }
 
+function fecharLoteSemRegistrar() {
+  _LOTE_ENTRIES_PENDENTES = [];
+  fecharLote();
+}
 
 // ================================================================
 // ALERTAS DE EVENTOS DO CALENDÁRIO
@@ -6512,8 +6616,38 @@ function importarEventos(input) {
           <div class="lote-preview" id="lote-preview"></div>
         </div>
         <div id="lote-result"></div>
+
+        <!-- Painel pós-geração mala direta (e-mail) -->
+        <div class="lote-mala-panel" id="lote-mala-panel">
+          <div class="lote-mala-ok">
+            ✅ <span id="lote-mala-nome-arquivo">mala_direta.xlsx</span>
+            <span id="lote-mala-subtitulo">Baixada na pasta Downloads.</span>
+          </div>
+          <div class="lote-mala-como">Como enviar pelo seu Outlook (<span id="lote-mala-email-ref">marques.marcela@estacio.br</span>)</div>
+          <ol class="lote-mala-steps">
+            <li>Abra o <b>Word</b> com um documento em branco.</li>
+            <li>Aba <b>Correspondências → Iniciar Mala Direta → Mensagens de Email</b>.</li>
+            <li><b>Selecionar Destinatários → Usar uma Lista Existente</b> → escolha a planilha baixada → aba <b>MalaDireta</b>.</li>
+            <li><b>Inserir Campo de Mesclagem → MENSAGEM</b>. É só isso no documento, a mensagem já vem pronta para cada aluno.</li>
+            <li>Clique em <b>Visualizar Resultados</b> e passe alguns alunos para conferir.</li>
+            <li><b>Concluir e Mesclar → Enviar Mensagens de Email</b>. Em <i>Para</i> escolha <b>EMAIL</b>, em <i>Linha de assunto</i> cole o texto abaixo, formato <b>HTML</b> e clique OK.</li>
+          </ol>
+          <div class="lote-mala-assunto-label">Linha de assunto:</div>
+          <div class="lote-mala-assunto-row">
+            <input type="text" class="lote-mala-assunto-input" id="lote-mala-assunto" readonly>
+            <button class="btn btn-sm" onclick="copiarAssuntoLote()">Copiar</button>
+          </div>
+          <div class="lote-mala-warn">⚠️ A mala direta do Word usa o mesmo assunto para todos. Troque as variáveis {…} do assunto por um texto fixo.</div>
+          <div class="lote-mala-info">Precisa do <b>Outlook clássico</b> instalado no Windows e aberto com a conta institucional. O "novo Outlook" e o Outlook na web não fazem mala direta. Os e-mails ficam na Caixa de Saída e saem aos poucos, pode deixar o Outlook aberto até terminar.</div>
+          <p style="font-size:12px;color:var(--text2);margin:0 0 10px">Depois de enviar, clique em <b>Registrar como enviados</b> para gravar no histórico de envios e nos acionamentos.</p>
+          <div class="lote-mala-footer">
+            <button class="btn" onclick="fecharLoteSemRegistrar()">Fechar sem registrar</button>
+            <button class="btn btn-sm btn-outline" onclick="baixarMalaDiretoNovamente()">⬇ Baixar de novo</button>
+            <button class="btn btn-primary" onclick="registrarEnviadosLote()">✅ Registrar como enviados</button>
+          </div>
+        </div>
       </div>
-      <div class="lote-footer">
+      <div class="lote-footer" id="lote-footer-normal">
         <span style="font-size:12px;color:var(--text3);align-self:center" id="lote-footer-info"></span>
         <button class="btn" onclick="fecharLote()">Cancelar</button>
         <button class="btn btn-primary" onclick="executarLote('')">✅ Registrar acionamentos</button>
