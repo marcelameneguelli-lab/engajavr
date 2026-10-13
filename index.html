@@ -5774,7 +5774,7 @@ async function executarLote(canal) {
       base: ACTIVE_BASE
     };
     HISTORY[r.COD_MATRICULA].push(entry);
-    if (GAS_URL) gasCall('saveAction', entry);
+    // Não dispara saveAction individual aqui — será feito em lote abaixo
 
     comSucesso.push(r.NOM_ALUNO);
 
@@ -5821,21 +5821,9 @@ async function executarLote(canal) {
     URL.revokeObjectURL(url);
   }
 
-  // Para e-mail: abrir cliente de e-mail (Outlook/mailto) para cada destinatário
-  // OU enviar via GAS se preferir
+  // Para e-mail: apenas gerar CSV para uso com a macro VBA (EnviarEmailsLote.bas)
+  // Não abrir mailto: individual — evita travar com muitos alunos
   if (canal === 'E-mail' && emailList.length > 0) {
-    // Abrir um mailto: individual por destinatário com delay
-    // O Outlook abrirá uma janela separada para cada e-mail
-    emailList.forEach(function(em, i) {
-      setTimeout(function() {
-        var subj = encodeURIComponent(em.subj);
-        var body = encodeURIComponent(em.msg);
-        var a = document.createElement('a');
-        a.href = 'mailto:' + em.email + '?subject=' + subj + '&body=' + body;
-        a.click();
-      }, i * 1500); // 1.5s entre cada abertura para não sobrecarregar
-    });
-    // CSV de backup com todos os dados
     var emailCSV = '\uFEFF' + 'MATRICULA;NOME;EMAIL;ASSUNTO;MENSAGEM\n' +
       emailList.map(function(e) {
         var bodyClean = e.msg.replace(/\n/g, ' | ').replace(/"/g, '""');
@@ -5846,7 +5834,8 @@ async function executarLote(canal) {
     var csvLink = document.createElement('a');
     csvLink.href = csvUrl;
     csvLink.download = 'emails-lote-' + emailList.length + '.csv';
-    setTimeout(function() { csvLink.click(); URL.revokeObjectURL(csvUrl); }, 500);
+    csvLink.click();
+    URL.revokeObjectURL(csvUrl);
   }
 
   // Atualizar UI
@@ -5859,7 +5848,7 @@ async function executarLote(canal) {
   // Resultado
   var txt = '✅ ' + comSucesso.length + ' acionamentos registrados.';
   if (canal === 'WhatsApp') txt += ' CSV exportado com ' + rows.length + ' números.';
-  if (canal === 'E-mail')   txt += ' ' + emailList.length + ' janela(s) de e-mail abrindo no Outlook. CSV de backup gerado.';
+  if (canal === 'E-mail')   txt += ' CSV com ' + emailList.length + ' destinatários gerado — use a macro VBA para envio.';
   if (semContato.length) txt += '\n⚠️ ' + semContato.length + ' sem contato: ' + semContato.slice(0,5).join(', ') + (semContato.length>5?'...':'');
   resEl.className = 'lote-result ok';
   resEl.textContent = txt;
