@@ -48,6 +48,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .tab:hover { background: var(--surface2); color: var(--text); }
 .tab.active { background: var(--accent-bg); color: var(--accent-text); }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text3); white-space: nowrap; }
+.topbar-user-chip { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border);
+  border-radius:20px; padding:3px 10px 3px 6px; cursor:default; }
+.topbar-user-avatar { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#3b82f6,#6366f1);
+  display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; flex-shrink:0; }
+.topbar-sair { padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:transparent;
+  color:var(--text3); font-size:11px; cursor:pointer; transition:background .15s; }
+.topbar-sair:hover { background:var(--border); color:var(--text-primary); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; }
 
 .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
@@ -532,33 +539,39 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .logo-preview-wrap { display:none; text-align:center; margin-bottom:12px; }
 .logo-preview-wrap img { max-height:80px; max-width:200px; border-radius:8px; border:1px solid var(--border); }
 
-/* Tela de bloqueio do app */
+/* Tela de login do app */
 #app-lock-overlay {
   position: fixed; inset: 0; z-index: 999999;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background: linear-gradient(135deg, #003B71 0%, #002855 50%, #001a3a 100%);
   display: flex; align-items: center; justify-content: center;
   flex-direction: column; gap: 0;
 }
 #app-lock-overlay.hidden { display: none; }
 .lock-card {
-  background: rgba(255,255,255,0.07); backdrop-filter: blur(20px);
+  background: rgba(255,255,255,0.08); backdrop-filter: blur(24px);
   border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
-  padding: 40px 36px; text-align: center; width: 340px; max-width: 90vw;
+  padding: 36px 32px; text-align: center; width: 380px; max-width: 92vw;
 }
-.lock-logo-text { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 4px; letter-spacing: -0.5px; }
-.lock-sub { font-size: 13px; color: rgba(255,255,255,0.55); margin-bottom: 28px; }
-.lock-input-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 8px; }
-.lock-digit { width: 48px; height: 56px; text-align: center; font-size: 24px; font-weight: 700;
-  border: 2px solid rgba(255,255,255,0.25); border-radius: 12px;
-  background: rgba(255,255,255,0.08); color: #fff; outline: none;
-  transition: border-color .15s; }
-.lock-digit:focus { border-color: #60a5fa; }
-.lock-error { font-size: 12px; color: #f87171; min-height: 18px; margin-bottom: 12px; }
-.lock-btn { width: 100%; padding: 12px; border: none; border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff;
-  font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
-.lock-btn:hover { opacity: .88; }
-.lock-hint { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 16px; }
+.lock-logo-text { font-size: 26px; font-weight: 800; color: #fff; margin-bottom: 2px; letter-spacing: -0.5px; }
+.lock-sub { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 24px; }
+.lock-field { display:flex; flex-direction:column; text-align:left; gap:4px; margin-bottom:14px; }
+.lock-field label { font-size:12px; color:rgba(255,255,255,0.65); font-weight:600; letter-spacing:.3px; }
+.lock-field input { padding:10px 12px; border-radius:10px; border:1.5px solid rgba(255,255,255,0.2);
+  background:rgba(255,255,255,0.08); color:#fff; font-size:14px; outline:none; transition:border-color .15s; }
+.lock-field input::placeholder { color:rgba(255,255,255,0.3); }
+.lock-field input:focus { border-color:#60a5fa; background:rgba(255,255,255,0.12); }
+.lock-error { font-size:12px; color:#f87171; min-height:18px; margin-bottom:10px; text-align:left; }
+.lock-btn { width:100%; padding:12px; border:none; border-radius:12px;
+  background: linear-gradient(135deg, #8DC63F, #6aab2a); color:#fff;
+  font-size:15px; font-weight:700; cursor:pointer; transition:opacity .15s; }
+.lock-btn:hover { opacity:.88; }
+.lock-hint { font-size:11px; color:rgba(255,255,255,0.3); margin-top:14px; }
+.lock-user-info { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.08);
+  border-radius:10px; padding:10px 14px; margin-bottom:20px; text-align:left; }
+.lock-user-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#3b82f6,#6366f1);
+  display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.lock-user-name { font-size:14px; font-weight:700; color:#fff; }
+.lock-user-email { font-size:11px; color:rgba(255,255,255,0.5); }
 
 </style>
   <!-- manifest só carrega via HTTPS (GitHub Pages / GAS) -->
@@ -573,21 +586,45 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 </head>
 <body>
 
-<!-- TELA DE BLOQUEIO DO APP -->
+<!-- TELA DE LOGIN DO APP -->
 <div id="app-lock-overlay">
-  <div class="lock-card">
+  <div class="lock-card" id="lock-card-login">
     <div class="lock-logo-text">🎓 EngajaVR</div>
-    <div class="lock-sub">Estácio Volta Redonda · Acesso restrito</div>
-    <div class="lock-input-row" id="lock-pin-row">
-      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk0">
-      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk1">
-      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk2">
-      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk3">
+    <div class="lock-sub">Estácio Volta Redonda · CRM Acadêmico</div>
+    <div class="lock-field">
+      <label for="lg-email">E-mail corporativo</label>
+      <input type="email" id="lg-email" autocomplete="username" placeholder="nome@estacio.br" onkeydown="if(event.key==='Enter')document.getElementById('lg-senha').focus()">
+    </div>
+    <div class="lock-field">
+      <label for="lg-senha">Senha</label>
+      <input type="password" id="lg-senha" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')fazerLoginApp()">
     </div>
     <div class="lock-error" id="lock-error"></div>
-    <button class="lock-btn" onclick="verificarSenhaApp()">🔓 Entrar</button>
-    <div class="lock-hint">Digite a senha de acesso de 4 dígitos</div>
-    <div class="lock-hint" style="margin-top:6px;color:rgba(255,255,255,0.22);font-size:10px">Senha padrão inicial: <b style="color:rgba(255,255,255,0.35)">1234</b> · Altere em ⚙️ Admin</div>
+    <button class="lock-btn" onclick="fazerLoginApp()">🔓 Entrar</button>
+    <div class="lock-hint">Acesso restrito à equipe autorizada</div>
+  </div>
+  <!-- Tela de troca de senha (primeiro acesso ou redefinição) -->
+  <div class="lock-card" id="lock-card-troca" style="display:none">
+    <div class="lock-logo-text">🔑 Crie sua senha</div>
+    <div class="lock-sub" id="lock-troca-sub">Defina uma senha pessoal segura</div>
+    <div class="lock-user-info">
+      <div class="lock-user-avatar">👤</div>
+      <div>
+        <div class="lock-user-name" id="lock-troca-nome">Usuário</div>
+        <div class="lock-user-email" id="lock-troca-email">email@estacio.br</div>
+      </div>
+    </div>
+    <div class="lock-field">
+      <label for="lg-nova-senha">Nova senha</label>
+      <input type="password" id="lg-nova-senha" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+    </div>
+    <div class="lock-field">
+      <label for="lg-conf-senha">Confirmar senha</label>
+      <input type="password" id="lg-conf-senha" autocomplete="new-password" placeholder="Repita a senha" onkeydown="if(event.key==='Enter')salvarNovaSenhaApp()">
+    </div>
+    <div class="lock-error" id="lock-troca-error"></div>
+    <button class="lock-btn" onclick="salvarNovaSenhaApp()">✅ Salvar e entrar</button>
+    <div class="lock-hint">A senha deve ter pelo menos 6 caracteres</div>
   </div>
 </div>
 
@@ -622,6 +659,11 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="base-btn base-btn-ct" id="btn-base-ct" onclick="switchBase('ct')" title="Curso Técnico">📙 Curso Técnico</button>
   </div>
   <div class="topbar-right">
+    <div class="topbar-user-chip" id="topbar-user-chip" title="Usuário logado">
+      <div class="topbar-user-avatar" id="topbar-user-avatar">👤</div>
+      <span id="topbar-user-nome" style="font-size:12px;font-weight:600;color:var(--text-primary)">—</span>
+    </div>
+    <button class="topbar-sair" onclick="sairDoApp()" title="Encerrar sessão">⏻ Sair</button>
     <span class="status-dot"></span>
     <span id="top-count">Carregando...</span>
   </div>
@@ -1250,12 +1292,31 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <div id="publish-result" style="font-size:11px;margin-top:8px;color:var(--text3)"></div>
           </div>
 
-          <!-- Alterar senha -->
+          <!-- Usuários autorizados -->
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
-            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:8px">🔑 Alterar senha de acesso</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:10px">🔐 Usuários autorizados</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:8px;align-items:end">
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Nome</div>
+                <input type="text" id="adm-user-nome" placeholder="Ex: Alice" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:3px">E-mail corporativo</div>
+                <input type="email" id="adm-user-email" placeholder="nome@estacio.br" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              </div>
+              <button class="btn btn-sm btn-primary" onclick="admAdicionarUsuario()" style="height:32px">+ Adicionar</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px">O usuário cria sua senha própria no primeiro acesso.</div>
+            <div id="adm-users-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div id="adm-users-result" style="font-size:12px;margin-top:6px"></div>
+          </div>
+
+          <!-- Minha senha -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:8px">🔑 Alterar minha senha</div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <input type="password" id="admin-new-pin-1" maxlength="4" placeholder="Nova senha (4 dígitos)" style="flex:1;min-width:160px;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;letter-spacing:4px">
-              <input type="password" id="admin-new-pin-2" maxlength="4" placeholder="Confirmar senha" style="flex:1;min-width:160px;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;letter-spacing:4px">
+              <input type="password" id="admin-new-pin-1" placeholder="Nova senha (mín. 6 caracteres)" style="flex:1;min-width:160px;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <input type="password" id="admin-new-pin-2" placeholder="Confirmar senha" style="flex:1;min-width:160px;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
               <button class="btn btn-sm btn-primary" onclick="adminAlterarSenha()">Salvar</button>
             </div>
             <div id="admin-pin-change-result" style="font-size:12px;margin-top:6px"></div>
@@ -1991,16 +2052,39 @@ async function loadDB(key) {
 }
 
 
-// ========== BLOQUEIO DO APP ==========
-// Senha de acesso ao app — separada do PIN admin (mais simples, protege visualização de dados)
-// Padrão: mesmo PIN admin. Compartilha armazenamento para não duplicar senhas.
+// ========== LOGIN DO APP (email corporativo + senha) ==========
 var _APP_SESSION_KEY = 'engajavr_session_ok';
+var _APP_USER_KEY    = 'engajavr_session_user';   // email do usuário logado
+var _APP_USERS_KEY   = 'engajavr_usuarios';        // lista de usuários autorizados
 var _appDesbloqueado = false;
+var _usuarioLogado   = null;   // { email, nome, perfil, primeiroAcesso }
+
+// Usuário admin padrão — ativo enquanto não houver usuários cadastrados
+var _ADMIN_PADRAO = { email: 'marques.marcela@estacio.br', nome: 'Marcela', perfil: 'admin', senha: '' };
+
+function _getUsuarios() {
+  try {
+    var raw = localStorage.getItem(_APP_USERS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  // Retorna admin padrão como único usuário inicial
+  return [_ADMIN_PADRAO];
+}
+
+function _saveUsuarios(lista) {
+  try { localStorage.setItem(_APP_USERS_KEY, JSON.stringify(lista)); } catch(e) {}
+}
 
 function _verificarSessaoApp() {
   try {
     var s = sessionStorage.getItem(_APP_SESSION_KEY);
-    if (s === 'true') { _appDesbloqueado = true; _ocultarBloqueioApp(); return true; }
+    var u = sessionStorage.getItem(_APP_USER_KEY);
+    if (s === 'true' && u) {
+      _usuarioLogado = JSON.parse(u);
+      _appDesbloqueado = true;
+      _ocultarBloqueioApp();
+      return true;
+    }
   } catch(e) {}
   return false;
 }
@@ -2008,52 +2092,164 @@ function _verificarSessaoApp() {
 function _ocultarBloqueioApp() {
   var el = document.getElementById('app-lock-overlay');
   if (el) el.classList.add('hidden');
+  // Mostrar nome do usuário logado na topbar
+  _atualizarTopbarUsuario();
 }
 
-function verificarSenhaApp() {
-  var pin = ['lk0','lk1','lk2','lk3'].map(function(id){ return (document.getElementById(id)||{}).value||''; }).join('');
-  var correta = localStorage.getItem('engajavr_admin_pin') || '1234';
-  var errEl = document.getElementById('lock-error');
-  if (pin === correta) {
-    _appDesbloqueado = true;
-    try { sessionStorage.setItem(_APP_SESSION_KEY, 'true'); } catch(e) {}
-    _ocultarBloqueioApp();
-    init(); // inicializa o app só após autenticação
-  } else {
-    if (errEl) errEl.textContent = '❌ Senha incorreta. Tente novamente.';
-    ['lk0','lk1','lk2','lk3'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
-    var first = document.getElementById('lk0'); if (first) first.focus();
-  }
-}
-
-// Auto-avançar dígitos e confirmar com Enter
-document.addEventListener('DOMContentLoaded', function() {
-  var digits = ['lk0','lk1','lk2','lk3'];
-  digits.forEach(function(id, i) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('input', function() {
-      this.value = this.value.replace(/[^0-9]/g,'');
-      if (this.value.length === 1 && i < 3) {
-        document.getElementById(digits[i+1]).focus();
+function _atualizarTopbarUsuario() {
+  if (!_usuarioLogado) return;
+  // Mostrar nome e inicial na topbar
+  var nomeEl = document.getElementById('topbar-user-nome');
+  var avatarEl = document.getElementById('topbar-user-avatar');
+  if (nomeEl) nomeEl.textContent = _usuarioLogado.nome;
+  if (avatarEl) avatarEl.textContent = _usuarioLogado.nome.charAt(0).toUpperCase();
+  // Selecionar automaticamente o atendente correspondente nos selects
+  var sels = document.querySelectorAll('#atend-sel, #fin-atend-sel, #est-atend-sel');
+  sels.forEach(function(sel) {
+    if (!sel) return;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].text === _usuarioLogado.nome || sel.options[i].value === _usuarioLogado.nome) {
+        sel.selectedIndex = i;
+        break;
       }
-      if (this.value.length === 1 && i === 3) { verificarSenhaApp(); }
-    });
-    el.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') verificarSenhaApp();
-      if (e.key === 'Backspace' && !this.value && i > 0) {
-        document.getElementById(digits[i-1]).focus();
-      }
-    });
+    }
   });
-  // Verificar sessão — se já autenticado nesta aba, liberar direto
+}
+
+function fazerLoginApp() {
+  var email = (document.getElementById('lg-email') || {}).value || '';
+  var senha = (document.getElementById('lg-senha') || {}).value || '';
+  var errEl = document.getElementById('lock-error');
+  if (errEl) errEl.style.display = 'none';
+
+  email = email.trim().toLowerCase();
+  if (!email || !senha) {
+    if (errEl) { errEl.textContent = '⚠️ Preencha o e-mail e a senha.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  var usuarios = _getUsuarios();
+  var usuario = null;
+  for (var i = 0; i < usuarios.length; i++) {
+    if (usuarios[i].email.toLowerCase() === email) { usuario = usuarios[i]; break; }
+  }
+
+  if (!usuario) {
+    if (errEl) { errEl.textContent = '❌ E-mail não autorizado. Fale com a coordenação.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  // Primeiro acesso ou senha temporária (senha vazia no cadastro)
+  if (!usuario.senha || usuario.primeiroAcesso) {
+    // Aceita qualquer senha para primeiro acesso → redireciona para troca
+    _mostrarTrocaSenha(usuario, true);
+    return;
+  }
+
+  if (usuario.senha !== _hashSenha(senha)) {
+    if (errEl) { errEl.textContent = '❌ Senha incorreta.'; errEl.style.display = 'block'; }
+    var inp = document.getElementById('lg-senha');
+    if (inp) { inp.value = ''; inp.focus(); }
+    return;
+  }
+
+  _concluirLogin(usuario);
+}
+
+function _mostrarTrocaSenha(usuario, ehPrimeiro) {
+  document.getElementById('lock-card-login').style.display = 'none';
+  document.getElementById('lock-card-troca').style.display = 'block';
+  document.getElementById('lock-troca-nome').textContent = usuario.nome;
+  document.getElementById('lock-troca-email').textContent = usuario.email;
+  document.getElementById('lock-troca-sub').textContent = ehPrimeiro
+    ? 'Primeiro acesso — crie sua senha pessoal'
+    : 'Redefina sua senha';
+  document.getElementById('lock-card-troca').dataset.email = usuario.email;
+  setTimeout(function(){ var el = document.getElementById('lg-nova-senha'); if(el) el.focus(); }, 100);
+}
+
+function salvarNovaSenhaApp() {
+  var nova  = (document.getElementById('lg-nova-senha') || {}).value || '';
+  var conf  = (document.getElementById('lg-conf-senha')  || {}).value || '';
+  var errEl = document.getElementById('lock-troca-error');
+  var email = (document.getElementById('lock-card-troca') || {}).dataset.email || '';
+  if (errEl) errEl.style.display = 'none';
+
+  if (nova.length < 6) {
+    if (errEl) { errEl.textContent = '⚠️ A senha deve ter pelo menos 6 caracteres.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (nova !== conf) {
+    if (errEl) { errEl.textContent = '❌ As senhas não coincidem.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  var usuarios = _getUsuarios();
+  var usuario = null;
+  for (var i = 0; i < usuarios.length; i++) {
+    if (usuarios[i].email.toLowerCase() === email.toLowerCase()) {
+      usuarios[i].senha = _hashSenha(nova);
+      usuarios[i].primeiroAcesso = false;
+      usuario = usuarios[i];
+      break;
+    }
+  }
+  if (!usuario) return;
+  _saveUsuarios(usuarios);
+  _concluirLogin(usuario);
+}
+
+function _concluirLogin(usuario) {
+  _usuarioLogado = usuario;
+  _appDesbloqueado = true;
+  try {
+    sessionStorage.setItem(_APP_SESSION_KEY, 'true');
+    sessionStorage.setItem(_APP_USER_KEY, JSON.stringify(usuario));
+  } catch(e) {}
+  _ocultarBloqueioApp();
+  init();
+}
+
+function sairDoApp() {
+  try {
+    sessionStorage.removeItem(_APP_SESSION_KEY);
+    sessionStorage.removeItem(_APP_USER_KEY);
+  } catch(e) {}
+  _appDesbloqueado = false;
+  _usuarioLogado = null;
+  // Limpar campos e mostrar tela de login
+  var el = document.getElementById('app-lock-overlay');
+  if (el) el.classList.remove('hidden');
+  document.getElementById('lock-card-login').style.display = 'block';
+  document.getElementById('lock-card-troca').style.display = 'none';
+  var emailEl = document.getElementById('lg-email');
+  var senhaEl = document.getElementById('lg-senha');
+  if (emailEl) { emailEl.value = ''; emailEl.focus(); }
+  if (senhaEl) senhaEl.value = '';
+  var errEl = document.getElementById('lock-error');
+  if (errEl) errEl.style.display = 'none';
+}
+
+// Hash simples para a senha (não é criptografia forte, mas impede leitura direta no localStorage)
+function _hashSenha(s) {
+  var h = 0;
+  for (var i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return 'h' + Math.abs(h).toString(36) + s.length;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
   if (!_verificarSessaoApp()) {
-    var first = document.getElementById('lk0');
-    if (first) setTimeout(function(){ first.focus(); }, 100);
+    setTimeout(function(){
+      var el = document.getElementById('lg-email');
+      if (el) el.focus();
+    }, 100);
   } else {
-    init(); // sessão válida — inicializar app
+    init();
   }
 });
+
 
 async function init() {
   setText('loading-text', 'Carregando base salva...');
@@ -4101,6 +4297,7 @@ function _adminPopularSelects() {
 }
 
 function _initAdmin() {
+  admRenderUsuarios();
   if (_adminAutenticado) {
     document.getElementById('admin-pin-screen').style.display = 'none';
     document.getElementById('admin-panel-page').style.display = 'block';
@@ -4190,14 +4387,74 @@ function checkPin() {
   }
 }
 
+
+// ===== GESTÃO DE USUÁRIOS (Admin) =====
+function admRenderUsuarios() {
+  var lista = document.getElementById('adm-users-lista');
+  if (!lista) return;
+  var usuarios = _getUsuarios();
+  if (!usuarios.length) { lista.innerHTML = '<div style="font-size:12px;color:var(--text3)">Nenhum usuário cadastrado.</div>'; return; }
+  lista.innerHTML = usuarios.map(function(u, i) {
+    var isSelf = _usuarioLogado && u.email === _usuarioLogado.email;
+    var status = u.senha ? '<span style="color:#2b8a3e;font-size:11px">✅ Ativo</span>' : '<span style="color:#e67700;font-size:11px">⏳ Aguardando primeiro acesso</span>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:12px">'
+      + '<div style="flex:1"><b>' + u.nome + '</b> <span style="color:var(--text3)">' + u.email + '</span></div>'
+      + status
+      + (!isSelf ? '<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#c92a2a;color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="admRemoverUsuario(' + i + ')">Remover</button>' : '<span style="font-size:10px;color:var(--text3)">(você)</span>')
+      + '</div>';
+  }).join('');
+}
+
+function admAdicionarUsuario() {
+  var nome  = (document.getElementById('adm-user-nome')  || {}).value || '';
+  var email = (document.getElementById('adm-user-email') || {}).value || '';
+  var res   = document.getElementById('adm-users-result');
+  nome  = nome.trim();
+  email = email.trim().toLowerCase();
+  if (!nome || !email) { if(res){res.textContent='⚠️ Preencha nome e e-mail.';res.style.color='#c92a2a';} return; }
+  if (!email.includes('@')) { if(res){res.textContent='⚠️ E-mail inválido.';res.style.color='#c92a2a';} return; }
+  var usuarios = _getUsuarios();
+  for (var i = 0; i < usuarios.length; i++) {
+    if (usuarios[i].email === email) { if(res){res.textContent='❌ E-mail já cadastrado.';res.style.color='#c92a2a';} return; }
+  }
+  usuarios.push({ email: email, nome: nome, perfil: 'atendente', senha: '', primeiroAcesso: true });
+  _saveUsuarios(usuarios);
+  document.getElementById('adm-user-nome').value  = '';
+  document.getElementById('adm-user-email').value = '';
+  if(res){res.textContent='✅ Usuário adicionado! Ele criará a senha no primeiro acesso.';res.style.color='#2b8a3e';}
+  admRenderUsuarios();
+  setTimeout(function(){if(res)res.textContent='';}, 4000);
+}
+
+function admRemoverUsuario(idx) {
+  var usuarios = _getUsuarios();
+  if (idx < 0 || idx >= usuarios.length) return;
+  if (!confirm('Remover ' + usuarios[idx].nome + ' (' + usuarios[idx].email + ')?')) return;
+  usuarios.splice(idx, 1);
+  _saveUsuarios(usuarios);
+  admRenderUsuarios();
+}
+
 function adminAlterarSenha() {
   var p1 = document.getElementById('admin-new-pin-1').value.trim();
   var p2 = document.getElementById('admin-new-pin-2').value.trim();
   var res = document.getElementById('admin-pin-change-result');
-  if (!/^\d{4}$/.test(p1)) { res.textContent = '❌ A senha deve ter exatamente 4 dígitos numéricos.'; res.style.color = '#c92a2a'; return; }
+  if (p1.length < 6) { res.textContent = '❌ A senha deve ter pelo menos 6 caracteres.'; res.style.color = '#c92a2a'; return; }
   if (p1 !== p2) { res.textContent = '❌ As senhas não coincidem.'; res.style.color = '#c92a2a'; return; }
-  localStorage.setItem('engajavr_admin_pin', p1);
-  ADMIN_PIN = p1;
+  // Atualizar a senha do usuário logado no sistema de usuários
+  if (_usuarioLogado) {
+    var usuarios = _getUsuarios();
+    for (var i = 0; i < usuarios.length; i++) {
+      if (usuarios[i].email === _usuarioLogado.email) {
+        usuarios[i].senha = _hashSenha(p1);
+        usuarios[i].primeiroAcesso = false;
+        _usuarioLogado = usuarios[i];
+        break;
+      }
+    }
+    _saveUsuarios(usuarios);
+    try { sessionStorage.setItem(_APP_USER_KEY, JSON.stringify(_usuarioLogado)); } catch(e) {}
+  }
   document.getElementById('admin-new-pin-1').value = '';
   document.getElementById('admin-new-pin-2').value = '';
   res.textContent = '✅ Senha alterada com sucesso!';
