@@ -531,6 +531,35 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 .logo-drop input { display:none; }
 .logo-preview-wrap { display:none; text-align:center; margin-bottom:12px; }
 .logo-preview-wrap img { max-height:80px; max-width:200px; border-radius:8px; border:1px solid var(--border); }
+
+/* Tela de bloqueio do app */
+#app-lock-overlay {
+  position: fixed; inset: 0; z-index: 999999;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 0;
+}
+#app-lock-overlay.hidden { display: none; }
+.lock-card {
+  background: rgba(255,255,255,0.07); backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 20px;
+  padding: 40px 36px; text-align: center; width: 340px; max-width: 90vw;
+}
+.lock-logo-text { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 4px; letter-spacing: -0.5px; }
+.lock-sub { font-size: 13px; color: rgba(255,255,255,0.55); margin-bottom: 28px; }
+.lock-input-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 8px; }
+.lock-digit { width: 48px; height: 56px; text-align: center; font-size: 24px; font-weight: 700;
+  border: 2px solid rgba(255,255,255,0.25); border-radius: 12px;
+  background: rgba(255,255,255,0.08); color: #fff; outline: none;
+  transition: border-color .15s; }
+.lock-digit:focus { border-color: #60a5fa; }
+.lock-error { font-size: 12px; color: #f87171; min-height: 18px; margin-bottom: 12px; }
+.lock-btn { width: 100%; padding: 12px; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff;
+  font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+.lock-btn:hover { opacity: .88; }
+.lock-hint { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 16px; }
+
 </style>
   <!-- manifest só carrega via HTTPS (GitHub Pages / GAS) -->
   <script>if(location.protocol==='https:'){var l=document.createElement('link');l.rel='manifest';l.href='manifest.json';document.head.appendChild(l);}</script>
@@ -543,6 +572,25 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
+
+<!-- TELA DE BLOQUEIO DO APP -->
+<div id="app-lock-overlay">
+  <div class="lock-card">
+    <div class="lock-logo-text">🎓 EngajaVR</div>
+    <div class="lock-sub">Estácio Volta Redonda · Acesso restrito</div>
+    <div class="lock-input-row" id="lock-pin-row">
+      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk0">
+      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk1">
+      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk2">
+      <input class="lock-digit" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]" id="lk3">
+    </div>
+    <div class="lock-error" id="lock-error"></div>
+    <button class="lock-btn" onclick="verificarSenhaApp()">🔓 Entrar</button>
+    <div class="lock-hint">Digite a senha de acesso de 4 dígitos</div>
+    <div class="lock-hint" style="margin-top:6px;color:rgba(255,255,255,0.22);font-size:10px">Senha padrão inicial: <b style="color:rgba(255,255,255,0.35)">1234</b> · Altere em ⚙️ Admin</div>
+  </div>
+</div>
+
 
 <div class="loading-overlay" id="loading">
   <div class="spinner"></div>
@@ -564,6 +612,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="tab" id="tab-tarefas" onclick="showPage('tarefas')">✅ Tarefas</button>
     <button class="tab" onclick="showPage('tutoriais')">📚 Tutoriais</button>
     <button class="tab" onclick="showPage('financeiro')">💰 Financeiro</button>
+    <button class="tab" onclick="showPage('estagio')">🎓 Estágio</button>
     <button class="tab" onclick="showPage('importar')">Importar</button>
     <button class="tab" onclick="showPage('admin')" style="margin-left:auto;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
@@ -970,6 +1019,100 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
 
   <!-- Modal Nova Tarefa e Modal Tutorial estão fora do .main abaixo -->
 
+  <!-- ESTÁGIO / TCE -->
+  <div class="page" id="page-estagio">
+    <div class="dash-page" style="max-width:100%;padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;margin:0">🎓 Estágio &amp; TCE</h2>
+          <div style="font-size:13px;color:var(--text3);margin-top:2px">Alunos elegíveis a estágio · acompanhamento de abertura e deferimento do TCE</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="exportarEstagioXLSX()">⬇️ Exportar XLSX</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        <div style="background:#f3f0ff;border:1px solid #d0bfff;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('sem_tce')">
+          <div style="font-size:26px;font-weight:800;color:#5433c4" id="est-cnt-elegiveis">0</div>
+          <div style="font-size:10px;font-weight:700;color:#5433c4;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Total Elegíveis</div>
+        </div>
+        <div style="background:#fff9db;border:1px solid #ffd43b;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('sem_tce')">
+          <div style="font-size:26px;font-weight:800;color:#854f0b" id="est-cnt-pendente">0</div>
+          <div style="font-size:10px;font-weight:700;color:#854f0b;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Sem TCE</div>
+        </div>
+        <div style="background:#ebfbee;border:1px solid #b2f2bb;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('aberto')">
+          <div style="font-size:26px;font-weight:800;color:#276b35" id="est-cnt-aberto">0</div>
+          <div style="font-size:10px;font-weight:700;color:#276b35;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">TCE Aberto</div>
+        </div>
+        <div style="background:#e7f5ff;border:1px solid #a5d8ff;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('deferido')">
+          <div style="font-size:26px;font-weight:800;color:#1864ab" id="est-cnt-deferido">0</div>
+          <div style="font-size:10px;font-weight:700;color:#1864ab;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">TCE Deferido</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+        <div style="flex:1;min-width:160px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Status TCE</label>
+          <select id="est-filtro-tce" class="search-input" onchange="renderEstagio()" style="width:100%">
+            <option value="todos">Todos elegíveis</option>
+            <option value="sem_tce">Sem TCE aberto</option>
+            <option value="aberto">TCE Aberto</option>
+            <option value="deferido">TCE Deferido</option>
+            <option value="convalidacao">Com convalidação</option>
+            <option value="docs_pendentes">Docs pendentes na disciplina</option>
+          </select>
+        </div>
+        <div style="flex:2;min-width:200px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Busca</label>
+          <input type="text" id="est-busca" class="search-input" placeholder="Nome ou matrícula..." oninput="renderEstagio()" style="width:100%">
+        </div>
+        <div style="align-self:flex-end;font-size:12px;color:var(--text2);font-weight:600;padding-bottom:6px"><span id="est-lista-count">0 aluno(s)</span></div>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:20px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--surface)">
+              <th style="padding:10px 12px;border-bottom:2px solid var(--border)"><input type="checkbox" id="est-check-all" onchange="toggleTodosEstagio(this.checked)" title="Selecionar todos"></th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Aluno</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Matrícula</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Curso</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">TCE Aberto</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Deferido</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Convalidação</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Docs entregues</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Observação</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="est-tabela-body">
+            <tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text)">📨 Mensagem em lote — <span id="est-sel-count" style="color:var(--primary)">0</span> selecionado(s)</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:160px">
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente</label>
+            <select id="est-atend-sel" class="search-input" style="width:100%"><option value="">— selecione —</option></select>
+          </div>
+          <div style="flex:1;min-width:140px">
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Canal</label>
+            <select id="est-canal-sel" class="search-input" onchange="atualizarTemplateEst()" style="width:100%">
+              <option value="WhatsApp">💬 WhatsApp</option>
+              <option value="E-mail">✉️ E-mail</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Mensagem <span style="font-weight:400;font-size:10px;color:var(--text3);margin-left:6px">variáveis: {nome} {curso} {atendente}</span></label>
+          <textarea id="est-msg-template" class="search-input" rows="3" style="width:100%;resize:vertical;font-family:inherit;font-size:13px" placeholder="Digite a mensagem..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="dispararLoteEstagio()">🚀 Disparar em lote</button>
+          <button class="btn btn-sm" onclick="atualizarTemplateEst()">🔄 Sugerir mensagem</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- fim page-estagio -->
+
   <!-- FINANCEIRO -->
   <div class="page" id="page-financeiro">
     <div class="dash-page" style="max-width:100%;padding:20px">
@@ -997,7 +1140,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
         <div style="flex:1;min-width:160px">
           <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Filtro</label>
-          <select id="fin-filtro-tipo" class="search-input" onchange="renderModalFinanceiro()" style="width:100%">
+          <select id="fin-filtro-tipo" class="search-input" onchange="renderModalFinanceiro();sugerirMensagemFin()" style="width:100%">
             <option value="todos">Todos os inadimplentes</option>
             <option value="vencer">A vencer (próximos 5 dias)</option>
             <option value="hoje">Vence hoje</option>
@@ -1047,6 +1190,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </div>
         <div style="margin-top:12px">
           <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Mensagem <span style="font-weight:400;font-size:10px;color:var(--text3);margin-left:6px">variáveis: {nome} {curso} {divida} {prazo} {atendente}</span></label>
+          <div id="fin-msg-sugestao" style="display:none;font-size:11px;color:#2f9e44;background:#ebfbee;border:1px solid #b2f2bb;border-radius:6px;padding:5px 10px;margin-bottom:6px">✨ Sugestão automática com base no filtro selecionado — edite à vontade.</div>
           <textarea id="fin-msg-template" class="search-input" rows="4" style="width:100%;resize:vertical;font-family:inherit;font-size:13px" placeholder="Digite a mensagem..."></textarea>
         </div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -1846,6 +1990,71 @@ async function loadDB(key) {
   return null;
 }
 
+
+// ========== BLOQUEIO DO APP ==========
+// Senha de acesso ao app — separada do PIN admin (mais simples, protege visualização de dados)
+// Padrão: mesmo PIN admin. Compartilha armazenamento para não duplicar senhas.
+var _APP_SESSION_KEY = 'engajavr_session_ok';
+var _appDesbloqueado = false;
+
+function _verificarSessaoApp() {
+  try {
+    var s = sessionStorage.getItem(_APP_SESSION_KEY);
+    if (s === 'true') { _appDesbloqueado = true; _ocultarBloqueioApp(); return true; }
+  } catch(e) {}
+  return false;
+}
+
+function _ocultarBloqueioApp() {
+  var el = document.getElementById('app-lock-overlay');
+  if (el) el.classList.add('hidden');
+}
+
+function verificarSenhaApp() {
+  var pin = ['lk0','lk1','lk2','lk3'].map(function(id){ return (document.getElementById(id)||{}).value||''; }).join('');
+  var correta = localStorage.getItem('engajavr_admin_pin') || '1234';
+  var errEl = document.getElementById('lock-error');
+  if (pin === correta) {
+    _appDesbloqueado = true;
+    try { sessionStorage.setItem(_APP_SESSION_KEY, 'true'); } catch(e) {}
+    _ocultarBloqueioApp();
+    init(); // inicializa o app só após autenticação
+  } else {
+    if (errEl) errEl.textContent = '❌ Senha incorreta. Tente novamente.';
+    ['lk0','lk1','lk2','lk3'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    var first = document.getElementById('lk0'); if (first) first.focus();
+  }
+}
+
+// Auto-avançar dígitos e confirmar com Enter
+document.addEventListener('DOMContentLoaded', function() {
+  var digits = ['lk0','lk1','lk2','lk3'];
+  digits.forEach(function(id, i) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function() {
+      this.value = this.value.replace(/[^0-9]/g,'');
+      if (this.value.length === 1 && i < 3) {
+        document.getElementById(digits[i+1]).focus();
+      }
+      if (this.value.length === 1 && i === 3) { verificarSenhaApp(); }
+    });
+    el.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') verificarSenhaApp();
+      if (e.key === 'Backspace' && !this.value && i > 0) {
+        document.getElementById(digits[i-1]).focus();
+      }
+    });
+  });
+  // Verificar sessão — se já autenticado nesta aba, liberar direto
+  if (!_verificarSessaoApp()) {
+    var first = document.getElementById('lk0');
+    if (first) setTimeout(function(){ first.focus(); }, 100);
+  } else {
+    init(); // sessão válida — inicializar app
+  }
+});
+
 async function init() {
   setText('loading-text', 'Carregando base salva...');
   updateBaseSelectorUI();
@@ -2011,11 +2220,15 @@ function formandoBadge(v) {
 }
 
 function acionBadge(mat) {
-  const h = HISTORY[mat];
-  if (!h || h.length === 0) return '<span class="badge badge-gray">Pendente</span>';
+  const allH = HISTORY[mat] || [];
+  // Considera apenas acionamentos da base ativa para o status do semestre atual
+  const h = allH.filter(function(a){ return (a.base||'impar') === ACTIVE_BASE; });
+  const temAnterior = allH.length > h.length; // tem histórico de outros semestres
+  const sufixo = temAnterior ? ' <span title="Há acionamentos de semestres anteriores no histórico" style="color:var(--text3);cursor:help">📂</span>' : '';
+  if (!h || h.length === 0) return '<span class="badge badge-gray">Pendente</span>' + sufixo;
   const last = h[h.length - 1];
   const icons = { 'WhatsApp':'💬', 'Ligação':'📞', 'Presencial':'🏢', 'E-mail':'✉️' };
-  return '<span class="badge badge-blue">' + (icons[last.canal||last.tipo] || '📌') + ' ' + (last.canal||last.tipo) + ' · ' + last.date + '</span>';
+  return '<span class="badge badge-blue">' + (icons[last.canal||last.tipo] || '📌') + ' ' + (last.canal||last.tipo) + ' · ' + last.date + '</span>' + sufixo;
 }
 
 // ========== FILTERS ==========
@@ -2071,8 +2284,10 @@ function applyFilters() {
     if (prop && r.PROPENSAO_EVASAO !== prop) return false;
     const rSit = r.NOM_SITUACAO_ALUNO || r.SITUACAO_ALUNO || '';
     if (sit && rSit !== sit) return false;
-    if (acion === 'pendente' && HISTORY[r.COD_MATRICULA] && HISTORY[r.COD_MATRICULA].length > 0) return false;
-    if (acion === 'feito' && (!HISTORY[r.COD_MATRICULA] || HISTORY[r.COD_MATRICULA].length === 0)) return false;
+    // Filtro acionamento: considera apenas acionamentos da base ativa (semestre atual)
+    var _histBase = (HISTORY[r.COD_MATRICULA] || []).filter(function(a){ return (a.base||'impar') === ACTIVE_BASE; });
+    if (acion === 'pendente' && _histBase.length > 0) return false;
+    if (acion === 'feito' && _histBase.length === 0) return false;
     if (formando) {
       const fv = (r.IND_FORMANDO || '').toString().toUpperCase().trim();
       // Aceita S/N mas também 1/0 e SIM/NAO
@@ -2265,15 +2480,21 @@ function openModal(mat) {
     histEl.innerHTML = '<div class="history-empty">Nenhum acionamento registrado para este aluno.</div>';
   } else {
     const icons = { 'WhatsApp':'💬', 'Ligação':'📞', 'Presencial':'🏢', 'E-mail':'✉️' };
-    histEl.innerHTML = [...h].reverse().map(a => `
-      <div class="history-item">
+    const baseLabels = { impar:'📘 Ímpar', par:'📗 Par', ct:'📙 Técnico' };
+    histEl.innerHTML = [...h].reverse().map(a => {
+      const aBase = a.base || 'impar';
+      const isAtual = aBase === ACTIVE_BASE;
+      const baseBadge = isAtual ? '' : '<span class="base-badge base-badge-' + aBase + '" style="font-size:10px;margin-left:4px" title="Acionamento de outro semestre">' + (baseLabels[aBase]||aBase) + '</span>';
+      return `
+      <div class="history-item" style="${isAtual ? '' : 'opacity:0.75;border-left:2px solid var(--border)'}">
         <div class="hi-header">
-          <span class="badge badge-blue">${icons[(a.canal||a.tipo)]||'📌'} ${a.tipo}</span>${a.motivo ? '<span class="motivo-badge ' + (a.motivo==='financeiro'?'motivo-fin':'motivo-acad') + '">' + (a.motivo==='financeiro'?'💰 Financeiro':'📚 Acadêmico') + '</span>' : ''}
+          <span class="badge badge-blue">${icons[(a.canal||a.tipo)]||'📌'} ${a.tipo}</span>${baseBadge}${a.motivo ? '<span class="motivo-badge ' + (a.motivo==='financeiro'?'motivo-fin':'motivo-acad') + '">' + (a.motivo==='financeiro'?'💰 Financeiro':'📚 Acadêmico') + '</span>' : ''}
           <span class="hi-date">${a.datetime}</span>
         </div>
         <div class="hi-text">${a.obs || '<em style="color:var(--text3)">Sem observações</em>'}</div>
         <div class="hi-atend">Atendente: <strong>${a.atend}</strong>${a.nps !== '' && a.nps !== undefined ? ' · NPS: <span class="nps-tipo-badge ' + (a.nps_tipo==='promotor'?'nps-pro-b':a.nps_tipo==='passivo'?'nps-pas-b':'nps-det-b') + '">' + (a.nps_tipo==='promotor'?'⭐ Promotor':a.nps_tipo==='passivo'?'😐 Passivo':'😠 Detrator') + ' (' + a.nps + ')</span>' : ''}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   document.getElementById('modal-overlay').classList.add('open');
@@ -4453,7 +4674,8 @@ async function markFuDone(mat, idx, base) {
 }
 
 function fuBadgeCount() {
-  // Conta TODOS os follow-ups pendentes (não concluídos) — consistente com renderFollowup filtro "todos"
+  // Conta apenas follow-ups pendentes (não concluídos) QUE TÊM DATA agendada (hoje ou futura)
+  var hoje = todayStr();
   var n = 0;
   Object.keys(BASE_CONFIG).forEach(function(bk) {
     var fuData = {};
@@ -4467,7 +4689,7 @@ function fuBadgeCount() {
       var fus = fuData[mat];
       if (!Array.isArray(fus)) return;
       fus.forEach(function(fu) {
-        if (!fu.done) n++;
+        if (!fu.done && fu.data && fu.data >= hoje) n++;
       });
     });
   });
@@ -4510,6 +4732,7 @@ function showPage(p) {
   }
   if (p === 'importar')   updateImportLabel();
   if (p === 'financeiro') _initFinanceiro();
+  if (p === 'estagio')    _initEstagio();
   if (p === 'relatorio')  _initRelatorio();
   if (p === 'admin')      _initAdmin();
 }
@@ -4705,7 +4928,8 @@ async function importBackup(e) {
 }
 
 // ========== START ==========
-window.addEventListener('load', init);
+// init() agora é chamado APENAS após autenticação pela tela de bloqueio (_verificarSessaoApp / verificarSenhaApp)
+// window.addEventListener('load', init); — REMOVIDO para segurança
 
 // Avisar usuários que estão abrindo localmente para usar o GitHub Pages
 if (location.protocol === 'file:') {
@@ -6942,6 +7166,166 @@ function fecharModalFinanceiro() {
   // Sem overlay — mantido por compatibilidade
 }
 
+
+// ========== ESTÁGIO / TCE ==========
+var TCE_DATA = {};
+var _EST_SELECTED = new Set();
+var _TCE_STORAGE_KEY = 'crm_tce_data';
+
+function _loadTCEData() {
+  try { var raw = localStorage.getItem(_TCE_STORAGE_KEY); if (raw) TCE_DATA = JSON.parse(raw); } catch(e) { TCE_DATA = {}; }
+}
+function _saveTCEData() {
+  try { localStorage.setItem(_TCE_STORAGE_KEY, JSON.stringify(TCE_DATA)); } catch(e) {}
+}
+
+function _initEstagio() {
+  _loadTCEData();
+  var sel = document.getElementById('est-atend-sel');
+  if (sel && ATENDENTES) {
+    sel.innerHTML = '<option value="">— selecione —</option>' +
+      ATENDENTES.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
+  }
+  _EST_SELECTED.clear();
+  atualizarTemplateEst();
+  renderEstagio();
+}
+
+function filtrarEstPage(tipo) {
+  var el = document.getElementById('est-filtro-tce');
+  if (el) el.value = tipo;
+  renderEstagio();
+}
+
+function renderEstagio() {
+  if (!DB || !DB.length) {
+    var tb = document.getElementById('est-tabela-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
+    return;
+  }
+  function isElegivel(r) {
+    var v = r.QTD_ELEGIVEL_ESTAGIO || r.ELEGIVEL_ESTAGIO || r.IND_ESTAGIO || 0;
+    return v && v != '0' && v !== '' && v !== 'N' && v !== 'NAO' && v !== 'NÃO';
+  }
+  var elegiveis = DB.filter(isElegivel);
+  var filtro = (document.getElementById('est-filtro-tce')||{}).value||'todos';
+  var busca  = ((document.getElementById('est-busca')||{}).value||'').toLowerCase().trim();
+  var cntAberto=0, cntDeferido=0, cntPendente=0;
+  elegiveis.forEach(function(r){
+    var d=TCE_DATA[r.COD_MATRICULA]||{};
+    if(d.tce_aberto) cntAberto++;
+    if(d.tce_deferido) cntDeferido++;
+    if(!d.tce_aberto) cntPendente++;
+  });
+  setText('est-cnt-elegiveis', elegiveis.length);
+  setText('est-cnt-aberto', cntAberto);
+  setText('est-cnt-deferido', cntDeferido);
+  setText('est-cnt-pendente', cntPendente);
+  var lista = elegiveis.filter(function(r){
+    var d=TCE_DATA[r.COD_MATRICULA]||{};
+    if(busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
+    if(filtro==='sem_tce')       return !d.tce_aberto;
+    if(filtro==='aberto')        return d.tce_aberto;
+    if(filtro==='deferido')      return d.tce_deferido;
+    if(filtro==='convalidacao')  return d.convalidacao;
+    if(filtro==='docs_pendentes') return d.tce_aberto && !d.docs_entregues;
+    return true;
+  });
+  setText('est-lista-count', lista.length+' aluno(s)');
+  _EST_SELECTED.clear(); setText('est-sel-count',0);
+  var allChk=document.getElementById('est-check-all'); if(allChk) allChk.checked=false;
+  var tb=document.getElementById('est-tabela-body'); if(!tb) return;
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado para o filtro selecionado.</td></tr>'; return; }
+  tb.innerHTML=lista.map(function(r){
+    var d=TCE_DATA[r.COD_MATRICULA]||{};
+    function chk(field,label){
+      return '<input type="checkbox"'+(d[field]?' checked':'')+' title="'+label+'" onchange="toggleTCEField(\''+r.COD_MATRICULA+'\',\''+field+'\',this.checked)">';
+    }
+    var obsVal=(d.obs||'').replace(/"/g,'&quot;');
+    return '<tr>'+
+      '<td style="padding:8px 12px"><input type="checkbox" class="est-row-chk" data-mat="'+r.COD_MATRICULA+'" onchange="toggleSelectEst(\''+r.COD_MATRICULA+'\',this.checked)"></td>'+
+      '<td style="padding:8px 12px;font-weight:600">'+cap(r.NOM_ALUNO)+'</td>'+
+      '<td style="padding:8px 12px;color:var(--text3)">'+r.COD_MATRICULA+'</td>'+
+      '<td style="padding:8px 12px;font-size:12px">'+cap(r.NOM_CURSO||'')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('tce_aberto','TCE foi aberto?')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('tce_deferido','TCE foi deferido?')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('convalidacao','Há convalidação?')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('docs_entregues','Docs entregues na disciplina?')+'</td>'+
+      '<td style="padding:8px 12px"><input type="text" value="'+obsVal+'" placeholder="Observação..." style="width:140px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarOBSTCE(\''+r.COD_MATRICULA+'\',this.value)"></td>'+
+      '<td style="padding:8px 12px"><button class="btn btn-sm" onclick="openModal(\''+r.COD_MATRICULA+'\')">👤</button></td>'+
+      '</tr>';
+  }).join('');
+}
+
+function toggleTCEField(mat,field,val){
+  if(!TCE_DATA[mat]) TCE_DATA[mat]={};
+  TCE_DATA[mat][field]=val; _saveTCEData();
+  // atualizar contadores
+  var elegiveis=DB.filter(function(r){ var v=r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0; return v&&v!='0'&&v!==''&&v!=='N'&&v!=='NAO'&&v!=='NÃO'; });
+  var ca=0,cd=0,cp=0;
+  elegiveis.forEach(function(r){ var d=TCE_DATA[r.COD_MATRICULA]||{}; if(d.tce_aberto)ca++; if(d.tce_deferido)cd++; if(!d.tce_aberto)cp++; });
+  setText('est-cnt-aberto',ca); setText('est-cnt-deferido',cd); setText('est-cnt-pendente',cp);
+}
+
+function salvarOBSTCE(mat,obs){
+  if(!TCE_DATA[mat]) TCE_DATA[mat]={};
+  TCE_DATA[mat].obs=obs; _saveTCEData();
+}
+
+function toggleSelectEst(mat,checked){
+  if(checked) _EST_SELECTED.add(mat); else _EST_SELECTED.delete(mat);
+  setText('est-sel-count',_EST_SELECTED.size);
+}
+
+function toggleTodosEstagio(checked){
+  document.querySelectorAll('.est-row-chk').forEach(function(cb){
+    cb.checked=checked; var m=cb.getAttribute('data-mat');
+    if(m){ if(checked) _EST_SELECTED.add(m); else _EST_SELECTED.delete(m); }
+  });
+  setText('est-sel-count',_EST_SELECTED.size);
+}
+
+function atualizarTemplateEst(){
+  var canal=(document.getElementById('est-canal-sel')||{}).value||'WhatsApp';
+  var el=document.getElementById('est-msg-template'); if(!el) return;
+  if(canal==='WhatsApp'){
+    el.value='Olá {nome}! 🎓\nPassando para informar sobre a abertura do TCE para o seu curso *{curso}*.\nCaso ainda não tenha iniciado o processo, entre em contato conosco para orientações.\n{atendente} — Estácio Volta Redonda.';
+  } else {
+    el.value='Prezado(a) {nome},\n\nGostaríamos de informar sobre a abertura do TCE (Termo de Compromisso de Estágio) referente ao seu curso {curso}.\n\nCaso tenha dúvidas ou precise de orientações, entre em contato com nossa equipe.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda';
+  }
+}
+
+function dispararLoteEstagio(){
+  if(!_EST_SELECTED.size){ showToast('⚠️ Selecione ao menos um aluno.'); return; }
+  var atend=(document.getElementById('est-atend-sel')||{}).value||'';
+  var canal=(document.getElementById('est-canal-sel')||{}).value||'WhatsApp';
+  var tpl=(document.getElementById('est-msg-template')||{}).value||'';
+  if(!tpl){ showToast('⚠️ Digite a mensagem primeiro.'); return; }
+  var alunos=DB.filter(function(r){ return _EST_SELECTED.has(r.COD_MATRICULA); });
+  var delay=0;
+  alunos.forEach(function(r){
+    setTimeout(function(){
+      var msg=tpl.replace(/{nome}/g,cap(r.NOM_ALUNO)).replace(/{curso}/g,cap(r.NOM_CURSO||'')).replace(/{atendente}/g,atend||'Equipe Estácio');
+      if(canal==='WhatsApp'){ var tel=(r.TEL_CELULAR||r.TELEFONE||'').replace(/\D/g,''); if(tel) window.open('https://wa.me/55'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+      else { var email=r.EMAIL_ALUNO||r.EMAIL||''; if(email) window.open('mailto:'+email+'?subject=Estágio - TCE&body='+encodeURIComponent(msg),'_blank'); }
+    }, delay);
+    delay+=1500;
+  });
+  showToast('🚀 Disparando '+alunos.length+' mensagens via '+canal+'...');
+}
+
+function exportarEstagioXLSX(){
+  var elegiveis=DB.filter(function(r){ var v=r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0; return v&&v!='0'&&v!==''&&v!=='N'&&v!=='NAO'&&v!=='NÃO'; });
+  var rows=[['Matrícula','Nome','Curso','Elegível','TCE Aberto','TCE Deferido','Convalidação','Docs Entregues','Observação']];
+  elegiveis.forEach(function(r){
+    var d=TCE_DATA[r.COD_MATRICULA]||{};
+    rows.push([r.COD_MATRICULA,cap(r.NOM_ALUNO),cap(r.NOM_CURSO||''),r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||'S',d.tce_aberto?'Sim':'Não',d.tce_deferido?'Sim':'Não',d.convalidacao?'Sim':'Não',d.docs_entregues?'Sim':'Não',d.obs||'']);
+  });
+  var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='estagio_tce.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
 function _initFinanceiro() {
   var sel = document.getElementById('fin-atend-sel');
   if (sel && ATENDENTES) {
@@ -6956,6 +7340,9 @@ function _initFinanceiro() {
 }
 
 function atualizarTemplateFin() {
+  // Se há filtro específico ativo, usa sugestão contextualizada; senão usa o genérico
+  var filtro = (document.getElementById('fin-filtro-tipo') || {}).value || 'todos';
+  if (_FIN_TEMPLATES && _FIN_TEMPLATES[filtro]) { sugerirMensagemFin(); return; }
   var canal = (document.getElementById('fin-canal-sel') || {}).value || 'E-mail';
   var el = document.getElementById('fin-msg-template');
   if (!el) return;
@@ -6963,6 +7350,38 @@ function atualizarTemplateFin() {
     el.value = 'Olá {nome}! 😊\nIdentificamos uma pendência financeira no seu curso *{curso}* no valor de *{divida}*.\nPara regularizar e evitar bloqueio de acesso, entre em contato conosco.\nAtenciosamente, {atendente} — Estácio Volta Redonda.';
   } else {
     el.value = 'Prezado(a) {nome},\n\nIdentificamos uma pendência financeira no seu curso {curso}.\nValor em aberto: {divida}.\n\nPor favor, entre em contato com nossa equipe para negociar e regularizar sua situação.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda';
+  }
+}
+
+// Sugestão de mensagem contextualizada por filtro
+var _FIN_TEMPLATES = {
+  'vencer': {
+    'WhatsApp': 'Olá {nome}! 👋\nPassando para lembrar que sua parcela do curso *{curso}* vence em breve (valor: *{divida}*).\nEvite bloqueio regularizando antes do prazo. Qualquer dúvida, estamos aqui!\n{atendente} — Estácio Volta Redonda.',
+    'E-mail': 'Prezado(a) {nome},\n\nGostaríamos de lembrá-lo(a) que sua parcela do curso {curso} no valor de {divida} está próxima do vencimento ({prazo}).\n\nPara evitar bloqueios e manter sua matrícula ativa, recomendamos a regularização com antecedência.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda'
+  },
+  'hoje': {
+    'WhatsApp': 'Olá {nome}! ⚠️\nSua parcela do curso *{curso}* (valor: *{divida}*) vence *hoje*!\nAcesse o portal ou entre em contato para regularizar e evitar bloqueio.\n{atendente} — Estácio Volta Redonda.',
+    'E-mail': 'Prezado(a) {nome},\n\nInformamos que sua parcela do curso {curso} no valor de {divida} vence hoje ({prazo}).\n\nPara evitar o bloqueio imediato do acesso, pedimos que realize o pagamento o quanto antes.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda'
+  },
+  'vencido': {
+    'WhatsApp': 'Olá {nome}! 🔴\nIdentificamos uma pendência financeira vencida no seu curso *{curso}* (valor: *{divida}*).\nEntre em contato urgente para negociar e regularizar sua situação antes do bloqueio definitivo.\n{atendente} — Estácio Volta Redonda.',
+    'E-mail': 'Prezado(a) {nome},\n\nConstatamos que há uma pendência financeira vencida em seu curso {curso}, no valor de {divida}.\n\nPara evitar maiores consequências acadêmicas e financeiras, solicitamos contato urgente com nossa equipe para negociação.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda'
+  },
+  'alta': {
+    'WhatsApp': 'Olá {nome}! 📢\nSeu curso *{curso}* possui uma pendência financeira significativa de *{divida}*.\nTemos condições especiais de negociação disponíveis. Entre em contato para conversarmos!\n{atendente} — Estácio Volta Redonda.',
+    'E-mail': 'Prezado(a) {nome},\n\nIdentificamos uma pendência financeira de valor elevado ({divida}) em seu curso {curso}.\n\nDispomos de condições especiais de parcelamento e negociação. Entre em contato com nossa equipe para encontrar a melhor solução.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda'
+  }
+};
+
+function sugerirMensagemFin() {
+  var filtro = (document.getElementById('fin-filtro-tipo') || {}).value || 'todos';
+  var canal  = (document.getElementById('fin-canal-sel')  || {}).value || 'E-mail';
+  var el = document.getElementById('fin-msg-template');
+  if (!el) return;
+  var sugestao = document.getElementById('fin-msg-sugestao');
+  if (sugestao) sugestao.style.display = _FIN_TEMPLATES[filtro] ? '' : 'none';
+  if (_FIN_TEMPLATES[filtro]) {
+    el.value = _FIN_TEMPLATES[filtro][canal] || _FIN_TEMPLATES[filtro]['E-mail'];
   }
 }
 
