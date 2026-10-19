@@ -650,7 +650,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="tab" onclick="showPage('tutoriais')">📚 Tutoriais</button>
     <button class="tab" onclick="showPage('financeiro')">💰 Financeiro</button>
     <button class="tab" onclick="showPage('estagio')">🎓 Estágio</button>
-    <button class="tab" onclick="showPage('importar')">Importar</button>
+    <button class="tab" id="tab-importar" onclick="showPage('importar')">Importar</button>
     <button class="tab" onclick="showPage('admin')" style="margin-left:auto;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
   <div class="base-selector" id="base-selector">
@@ -1307,7 +1307,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
           <!-- Usuários autorizados -->
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:10px">🔐 Usuários autorizados</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:8px;align-items:end">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;margin-bottom:8px;align-items:end">
               <div>
                 <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Nome</div>
                 <input type="text" id="adm-user-nome" placeholder="Ex: Alice" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
@@ -1316,9 +1316,17 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
                 <div style="font-size:11px;color:var(--text3);margin-bottom:3px">E-mail corporativo</div>
                 <input type="email" id="adm-user-email" placeholder="nome@estacio.br" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
               </div>
-              <button class="btn btn-sm btn-primary" onclick="admAdicionarUsuario()" style="height:32px">+ Adicionar</button>
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Perfil</div>
+                <select id="adm-user-perfil" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+                  <option value="atendente">Atendente</option>
+                  <option value="apoio">Apoio</option>
+                  <option value="coordenador">Coordenador</option>
+                </select>
+              </div>
+              <button class="btn btn-sm btn-primary" onclick="admAdicionarUsuario()" style="height:32px;align-self:end">+ Adicionar</button>
             </div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:8px">O usuário cria sua senha própria no primeiro acesso.</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Perfis: <b>Coordenador</b> pode importar base · <b>Apoio</b> acesso completo · <b>Atendente</b> uso padrão. O usuário cria sua senha no primeiro acesso.</div>
             <div id="adm-users-lista" style="display:flex;flex-direction:column;gap:6px"></div>
             <div id="adm-users-result" style="font-size:12px;margin-top:6px"></div>
           </div>
@@ -1753,6 +1761,40 @@ async function gasCall(action, body={}) {
   }
 }
 
+// ---- Sincronização de base (DB) com GAS ----
+async function _sincronizarBaseGAS(base, db) {
+  if (!GAS_URL || !db || !db.length) return;
+  var label = (BASE_CONFIG[base] || {}).label || base;
+  showToast('☁️ Sincronizando base "' + label + '" com o servidor...');
+  try {
+    // Envia em chunks de 500 registros para não estourar o limite de payload do GAS
+    var CHUNK = 500;
+    var total = db.length;
+    var partes = Math.ceil(total / CHUNK);
+    for (var p = 0; p < partes; p++) {
+      var slice = db.slice(p * CHUNK, (p + 1) * CHUNK);
+      var r = await gasCall('salvarBase', { base: base, dados: slice, parte: p, total: partes });
+      if (!r || !r.ok) {
+        showToast('⚠️ Falha ao sincronizar parte ' + (p+1) + '/' + partes + ' com o servidor.');
+        return;
+      }
+    }
+    showToast('✅ Base "' + label + '" sincronizada com o servidor (' + total.toLocaleString('pt-BR') + ' alunos).');
+  } catch(e) {
+    showToast('⚠️ Erro ao sincronizar base com o servidor.');
+    console.warn('[_sincronizarBaseGAS]', e);
+  }
+}
+
+async function _carregarBaseGAS(base) {
+  if (!GAS_URL) return null;
+  try {
+    var r = await gasCall('carregarBase', { base: base });
+    if (r && r.ok && r.dados && r.dados.length > 0) return r.dados;
+  } catch(e) { console.warn('[_carregarBaseGAS]', e); }
+  return null;
+}
+
 async function syncFromRemote() {
   const dot = document.getElementById('sync-dot');
   const lbl = document.getElementById('sync-label');
@@ -2101,11 +2143,40 @@ function _verificarSessaoApp() {
   return false;
 }
 
+function _podeImportar() {
+  if (!_usuarioLogado) return false;
+  return ['admin','coordenador'].includes(_usuarioLogado.perfil);
+}
+function _podeAdmin() {
+  if (!_usuarioLogado) return false;
+  return _usuarioLogado.perfil === 'admin';
+}
+
+function _aplicarRestricoesPerfil() {
+  // Aba Importar: só admin e coordenador
+  var tabImportar = document.getElementById('tab-importar');
+  if (tabImportar) tabImportar.style.display = _podeImportar() ? '' : 'none';
+  // Aba Admin: só admin
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function(t) {
+    if (t.textContent.includes('Admin') || (t.getAttribute('onclick')||'').includes("'admin'")) {
+      t.style.display = _podeAdmin() ? '' : 'none';
+    }
+  });
+  // Chip de perfil na topbar
+  var chip = document.getElementById('topbar-user-chip');
+  if (chip && _usuarioLogado) {
+    chip.title = (_PERFIL_LABELS && _PERFIL_LABELS[_usuarioLogado.perfil]) ? (_PERFIL_LABELS[_usuarioLogado.perfil] + ' — ' + _usuarioLogado.email) : _usuarioLogado.email;
+  }
+}
+
 function _ocultarBloqueioApp() {
   var el = document.getElementById('app-lock-overlay');
   if (el) el.classList.add('hidden');
   // Mostrar nome do usuário logado na topbar
   _atualizarTopbarUsuario();
+  // Aplicar restrições de perfil
+  _aplicarRestricoesPerfil();
 }
 
 function _atualizarTopbarUsuario() {
@@ -2220,9 +2291,25 @@ function _concluirLogin(usuario) {
   } catch(e) {}
   _ocultarBloqueioApp();
   init().then(function() {
-    // Feedback de status da base após login
     if (DB && DB.length > 0) {
       showToast('✅ ' + DB.length.toLocaleString('pt-BR') + ' alunos carregados da base salva.');
+    } else if (GAS_URL) {
+      // Tentar carregar do GAS se local estiver vazio
+      showToast('🔄 Buscando base no servidor...');
+      _carregarBaseGAS(ACTIVE_BASE).then(function(dados) {
+        if (dados && dados.length > 0) {
+          DB = dados; FILTERED = [...DB];
+          saveDB(DB).catch(function(){});
+          updateTopCount(); applyFilters(); renderDashboard();
+          showToast('✅ ' + DB.length.toLocaleString('pt-BR') + ' alunos carregados do servidor.');
+        } else {
+          if (_podeImportar && _podeImportar()) {
+            showToast('ℹ️ Nenhuma base encontrada. Importe um CSV na aba Importar.');
+          } else {
+            showToast('ℹ️ Base ainda não disponível. Aguarde o coordenador importar.');
+          }
+        }
+      }).catch(function(){});
     } else {
       showToast('ℹ️ Nenhuma base salva encontrada. Importe um CSV na aba Importar.');
     }
@@ -4098,6 +4185,10 @@ function processFile(file) {
       DB = newDB;
       FILTERED = [...DB];
       await saveDB(DB);
+      // Sincronizar com GAS se o usuário tem permissão de importar
+      if (_podeImportar && _podeImportar() && GAS_URL) {
+        _sincronizarBaseGAS(ACTIVE_BASE, DB).catch(function(){});
+      }
 
       const semLabel = document.getElementById('import-sem-label') ? document.getElementById('import-sem-label').value : '';
 
@@ -4408,6 +4499,8 @@ function checkPin() {
 
 
 // ===== GESTÃO DE USUÁRIOS (Admin) =====
+var _PERFIL_LABELS = { admin: '🔴 Admin', coordenador: '🟠 Coordenador', apoio: '🟡 Apoio', atendente: '🟢 Atendente' };
+
 function admRenderUsuarios() {
   var lista = document.getElementById('adm-users-lista');
   if (!lista) return;
@@ -4415,19 +4508,35 @@ function admRenderUsuarios() {
   if (!usuarios.length) { lista.innerHTML = '<div style="font-size:12px;color:var(--text3)">Nenhum usuário cadastrado.</div>'; return; }
   lista.innerHTML = usuarios.map(function(u, i) {
     var isSelf = _usuarioLogado && u.email === _usuarioLogado.email;
-    var status = u.senha ? '<span style="color:#2b8a3e;font-size:11px">✅ Ativo</span>' : '<span style="color:#e67700;font-size:11px">⏳ Aguardando primeiro acesso</span>';
-    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:12px">'
-      + '<div style="flex:1"><b>' + u.nome + '</b> <span style="color:var(--text3)">' + u.email + '</span></div>'
+    var status = u.senha ? '<span style="color:#2b8a3e;font-size:11px">✅ Ativo</span>' : '<span style="color:#e67700;font-size:11px">⏳ 1º acesso</span>';
+    var perfilLabel = _PERFIL_LABELS[u.perfil] || u.perfil;
+    var perfilSel = isSelf || u.perfil === 'admin' ? '<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface);color:var(--text3)">' + perfilLabel + '</span>'
+      : '<select onchange="admAlterarPerfil(' + i + ',this.value)" style="font-size:11px;padding:2px 5px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">'
+        + ['coordenador','apoio','atendente'].map(function(p){ return '<option value="'+p+'"'+(u.perfil===p?' selected':'')+'>'+_PERFIL_LABELS[p]+'</option>'; }).join('')
+        + '</select>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:12px;flex-wrap:wrap">'
+      + '<div style="flex:1;min-width:140px"><b>' + u.nome + '</b> <span style="color:var(--text3);font-size:11px">' + u.email + '</span></div>'
+      + perfilSel
       + status
-      + (!isSelf ? '<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#c92a2a;color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="admRemoverUsuario(' + i + ')">Remover</button>' : '<span style="font-size:10px;color:var(--text3)">(você)</span>')
+      + (!isSelf && u.perfil !== 'admin' ? '<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#c92a2a;color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="admRemoverUsuario(' + i + ')">✕</button>' : '<span style="font-size:10px;color:var(--text3)">(você)</span>')
       + '</div>';
   }).join('');
 }
 
+function admAlterarPerfil(idx, novoPerfil) {
+  var usuarios = _getUsuarios();
+  if (idx < 0 || idx >= usuarios.length) return;
+  usuarios[idx].perfil = novoPerfil;
+  _saveUsuarios(usuarios);
+  admRenderUsuarios();
+  showToast('✅ Perfil de ' + usuarios[idx].nome + ' alterado para ' + (_PERFIL_LABELS[novoPerfil]||novoPerfil) + '.');
+}
+
 function admAdicionarUsuario() {
-  var nome  = (document.getElementById('adm-user-nome')  || {}).value || '';
-  var email = (document.getElementById('adm-user-email') || {}).value || '';
-  var res   = document.getElementById('adm-users-result');
+  var nome   = (document.getElementById('adm-user-nome')   || {}).value || '';
+  var email  = (document.getElementById('adm-user-email')  || {}).value || '';
+  var perfil = (document.getElementById('adm-user-perfil') || {}).value || 'atendente';
+  var res    = document.getElementById('adm-users-result');
   nome  = nome.trim();
   email = email.trim().toLowerCase();
   if (!nome || !email) { if(res){res.textContent='⚠️ Preencha nome e e-mail.';res.style.color='#c92a2a';} return; }
@@ -4436,7 +4545,7 @@ function admAdicionarUsuario() {
   for (var i = 0; i < usuarios.length; i++) {
     if (usuarios[i].email === email) { if(res){res.textContent='❌ E-mail já cadastrado.';res.style.color='#c92a2a';} return; }
   }
-  usuarios.push({ email: email, nome: nome, perfil: 'atendente', senha: '', primeiroAcesso: true });
+  usuarios.push({ email: email, nome: nome, perfil: perfil, senha: '', primeiroAcesso: true });
   _saveUsuarios(usuarios);
   document.getElementById('adm-user-nome').value  = '';
   document.getElementById('adm-user-email').value = '';
