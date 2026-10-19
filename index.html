@@ -1101,6 +1101,18 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <option value="docs_pendentes">Docs pendentes na disciplina</option>
           </select>
         </div>
+        <div style="flex:1;min-width:160px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Curso</label>
+          <select id="est-filtro-curso" class="search-input" onchange="renderEstagio()" style="width:100%">
+            <option value="">Todos os cursos</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:140px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Modalidade</label>
+          <select id="est-filtro-modalidade" class="search-input" onchange="renderEstagio()" style="width:100%">
+            <option value="">Todas</option>
+          </select>
+        </div>
         <div style="flex:2;min-width:200px">
           <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Busca</label>
           <input type="text" id="est-busca" class="search-input" placeholder="Nome ou matrícula..." oninput="renderEstagio()" style="width:100%">
@@ -1244,7 +1256,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
   </div>
 
   <!-- ===== PAGE ADMIN ===== -->
-  <div class="page" id="page-admin">
+  <div class="page" id="page-admin" style="overflow-y:auto">
     <div style="max-width:860px;margin:0 auto;padding:24px 16px">
 
       <!-- Tela de PIN -->
@@ -2207,7 +2219,14 @@ function _concluirLogin(usuario) {
     sessionStorage.setItem(_APP_USER_KEY, JSON.stringify(usuario));
   } catch(e) {}
   _ocultarBloqueioApp();
-  init();
+  init().then(function() {
+    // Feedback de status da base após login
+    if (DB && DB.length > 0) {
+      showToast('✅ ' + DB.length.toLocaleString('pt-BR') + ' alunos carregados da base salva.');
+    } else {
+      showToast('ℹ️ Nenhuma base salva encontrada. Importe um CSV na aba Importar.');
+    }
+  }).catch(function(){});
 }
 
 function sairDoApp() {
@@ -2649,7 +2668,7 @@ function openModal(mat) {
   document.getElementById('m-email').value = c.email || r.END_EMAIL || '';
   } // end else (_semDB)
 
-  document.getElementById('m-atend').value = localStorage.getItem('crm_last_atend') || '';
+  document.getElementById('m-atend').value = (_usuarioLogado && _usuarioLogado.nome) ? _usuarioLogado.nome : (localStorage.getItem('crm_last_atend') || '');
   document.getElementById('m-tipo').value = '';
   if (document.getElementById('m-fu-date'))   document.getElementById('m-fu-date').value = '';
   if (document.getElementById('m-fu-motivo')) document.getElementById('m-fu-motivo').value = '';
@@ -7443,6 +7462,27 @@ function _initEstagio() {
     sel.innerHTML = '<option value="">— selecione —</option>' +
       ATENDENTES.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
   }
+  // Popula filtros de Curso e Modalidade
+  var cursos = [], modalidades = [];
+  if (DB && DB.length) {
+    DB.forEach(function(r) {
+      var v = r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0;
+      if (!v||v=='0'||v===''||v==='N'||v==='NAO'||v==='NÃO') return;
+      var c = (r.NOM_CURSO||'').trim(); if (c && !cursos.includes(c)) cursos.push(c);
+      var m = (r.MOD_ENSINO||r.MODALIDADE||r.NOM_MODALIDADE||'').trim(); if (m && !modalidades.includes(m)) modalidades.push(m);
+    });
+  }
+  cursos.sort(); modalidades.sort();
+  var selC = document.getElementById('est-filtro-curso');
+  if (selC) {
+    selC.innerHTML = '<option value="">Todos os cursos</option>' +
+      cursos.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+  }
+  var selM = document.getElementById('est-filtro-modalidade');
+  if (selM) {
+    selM.innerHTML = '<option value="">Todas</option>' +
+      modalidades.map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('');
+  }
   _EST_SELECTED.clear();
   atualizarTemplateEst();
   renderEstagio();
@@ -7466,6 +7506,8 @@ function renderEstagio() {
   }
   var elegiveis = DB.filter(isElegivel);
   var filtro = (document.getElementById('est-filtro-tce')||{}).value||'todos';
+  var filtroCurso = ((document.getElementById('est-filtro-curso')||{}).value||'').trim();
+  var filtroMod   = ((document.getElementById('est-filtro-modalidade')||{}).value||'').trim();
   var busca  = ((document.getElementById('est-busca')||{}).value||'').toLowerCase().trim();
   var cntAberto=0, cntDeferido=0, cntPendente=0;
   elegiveis.forEach(function(r){
@@ -7480,6 +7522,8 @@ function renderEstagio() {
   setText('est-cnt-pendente', cntPendente);
   var lista = elegiveis.filter(function(r){
     var d=TCE_DATA[r.COD_MATRICULA]||{};
+    if(filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
+    if(filtroMod && (r.MOD_ENSINO||r.MODALIDADE||r.NOM_MODALIDADE||'').trim() !== filtroMod) return false;
     if(busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
     if(filtro==='sem_tce')       return !d.tce_aberto;
     if(filtro==='aberto')        return d.tce_aberto;
