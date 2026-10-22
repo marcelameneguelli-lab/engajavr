@@ -1071,8 +1071,8 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </div>
         <button class="btn btn-sm btn-primary" onclick="exportarEstagioXLSX()">⬇️ Exportar XLSX</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
-        <div style="background:#f3f0ff;border:1px solid #d0bfff;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('sem_tce')">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+        <div style="background:#f3f0ff;border:1px solid #d0bfff;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('todos')">
           <div style="font-size:26px;font-weight:800;color:#5433c4" id="est-cnt-elegiveis">0</div>
           <div style="font-size:10px;font-weight:700;color:#5433c4;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Total Elegíveis</div>
         </div>
@@ -1088,6 +1088,10 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
           <div style="font-size:26px;font-weight:800;color:#1864ab" id="est-cnt-deferido">0</div>
           <div style="font-size:10px;font-weight:700;color:#1864ab;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">TCE Deferido</div>
         </div>
+        <div style="background:#fff0f6;border:1px solid #faa2c1;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEstPage('indeferido')">
+          <div style="font-size:26px;font-weight:800;color:#a61e4d" id="est-cnt-indeferido">0</div>
+          <div style="font-size:10px;font-weight:700;color:#a61e4d;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Indeferido</div>
+        </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
         <div style="flex:1;min-width:160px">
@@ -1099,6 +1103,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <option value="deferido">TCE Deferido</option>
             <option value="convalidacao">Com convalidação</option>
             <option value="docs_pendentes">Docs pendentes na disciplina</option>
+            <option value="indeferido">TCE Indeferido</option>
           </select>
         </div>
         <div style="flex:1;min-width:160px">
@@ -1131,6 +1136,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
               <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Deferido</th>
               <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Convalidação</th>
               <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Docs entregues</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#a61e4d">Indeferido</th>
               <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Observação</th>
               <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Ações</th>
             </tr>
@@ -3325,16 +3331,10 @@ async function saveAction() {
   const contato = { matricula: CURRENT_MAT, cel, fone, email };
   await STORE.set(_bCfg.storageC, CONTACTS);
 
-  // Push ao GAS — aguardar e tratar erro
+  // Push ao GAS — fire-and-forget (não bloqueia o modal)
   if (GAS_URL) {
-    try {
-      const gr = await Promise.race([
-        gasCall('saveAction', entry),
-        new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 30000); })
-      ]);
-      if (!gr || !gr.ok) console.warn('GAS saveAction falhou:', gr);
-      gasCall('saveContact', contato).catch(function(){});
-    } catch(e) { console.warn('GAS saveAction erro:', e.message); }
+    gasCall('saveAction', entry).catch(function(e){ console.warn('GAS saveAction erro:', e.message); });
+    gasCall('saveContact', contato).catch(function(){});
   }
 
   // Save follow-up if scheduled
@@ -4518,7 +4518,10 @@ function admRenderUsuarios() {
       + '<div style="flex:1;min-width:140px"><b>' + u.nome + '</b> <span style="color:var(--text3);font-size:11px">' + u.email + '</span></div>'
       + perfilSel
       + status
-      + (!isSelf && u.perfil !== 'admin' ? '<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#c92a2a;color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="admRemoverUsuario(' + i + ')">✕</button>' : '<span style="font-size:10px;color:var(--text3)">(você)</span>')
+      + (!isSelf && u.perfil !== 'admin'
+          ? '<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#1971c2;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-right:4px" onclick="admResetarSenha(' + i + ')" title="Zera a senha — o usuário cria uma nova no próximo login">🔑 Resetar</button>'
+            + '<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;background:#c92a2a;color:#fff;border:none;border-radius:4px;cursor:pointer" onclick="admRemoverUsuario(' + i + ')">✕</button>'
+          : '<span style="font-size:10px;color:var(--text3)">(você)</span>')
       + '</div>';
   }).join('');
 }
@@ -4552,6 +4555,17 @@ function admAdicionarUsuario() {
   if(res){res.textContent='✅ Usuário adicionado! Ele criará a senha no primeiro acesso.';res.style.color='#2b8a3e';}
   admRenderUsuarios();
   setTimeout(function(){if(res)res.textContent='';}, 4000);
+}
+
+function admResetarSenha(idx) {
+  var usuarios = _getUsuarios();
+  if (idx < 0 || idx >= usuarios.length) return;
+  if (!confirm('Resetar a senha de ' + usuarios[idx].nome + '?\n\nEle precisará criar uma nova senha no próximo login.')) return;
+  usuarios[idx].senha = '';
+  usuarios[idx].primeiroAcesso = true;
+  _saveUsuarios(usuarios);
+  admRenderUsuarios();
+  showToast('🔑 Senha de ' + usuarios[idx].nome + ' resetada. Ele criará uma nova senha no próximo login.');
 }
 
 function admRemoverUsuario(idx) {
@@ -7578,7 +7592,7 @@ function _initEstagio() {
       var v = r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0;
       if (!v||v=='0'||v===''||v==='N'||v==='NAO'||v==='NÃO') return;
       var c = (r.NOM_CURSO||'').trim(); if (c && !cursos.includes(c)) cursos.push(c);
-      var m = (r.MOD_ENSINO||r.MODALIDADE||r.NOM_MODALIDADE||'').trim(); if (m && !modalidades.includes(m)) modalidades.push(m);
+      var m = (r.MODALIDADE_PP_PC||r.MOD_ENSINO||r.MODALIDADE||r.NOM_MODALIDADE||'').trim(); if (m && !modalidades.includes(m)) modalidades.push(m);
     });
   }
   cursos.sort(); modalidades.sort();
@@ -7606,7 +7620,7 @@ function filtrarEstPage(tipo) {
 function renderEstagio() {
   if (!DB || !DB.length) {
     var tb = document.getElementById('est-tabela-body');
-    if (tb) tb.innerHTML = '<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
     return;
   }
   function isElegivel(r) {
@@ -7618,34 +7632,37 @@ function renderEstagio() {
   var filtroCurso = ((document.getElementById('est-filtro-curso')||{}).value||'').trim();
   var filtroMod   = ((document.getElementById('est-filtro-modalidade')||{}).value||'').trim();
   var busca  = ((document.getElementById('est-busca')||{}).value||'').toLowerCase().trim();
-  var cntAberto=0, cntDeferido=0, cntPendente=0;
+  var cntAberto=0, cntDeferido=0, cntPendente=0, cntIndeferido=0;
   elegiveis.forEach(function(r){
     var d=TCE_DATA[r.COD_MATRICULA]||{};
     if(d.tce_aberto) cntAberto++;
     if(d.tce_deferido) cntDeferido++;
     if(!d.tce_aberto) cntPendente++;
+    if(d.tce_indeferido) cntIndeferido++;
   });
   setText('est-cnt-elegiveis', elegiveis.length);
   setText('est-cnt-aberto', cntAberto);
   setText('est-cnt-deferido', cntDeferido);
   setText('est-cnt-pendente', cntPendente);
+  setText('est-cnt-indeferido', cntIndeferido);
   var lista = elegiveis.filter(function(r){
     var d=TCE_DATA[r.COD_MATRICULA]||{};
     if(filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
-    if(filtroMod && (r.MOD_ENSINO||r.MODALIDADE||r.NOM_MODALIDADE||'').trim() !== filtroMod) return false;
+    if(filtroMod && (r.MODALIDADE_PP_PC||r.MOD_ENSINO||r.MODALIDADE||r.NOM_MODALIDADE||'').trim() !== filtroMod) return false;
     if(busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
     if(filtro==='sem_tce')       return !d.tce_aberto;
     if(filtro==='aberto')        return d.tce_aberto;
     if(filtro==='deferido')      return d.tce_deferido;
     if(filtro==='convalidacao')  return d.convalidacao;
     if(filtro==='docs_pendentes') return d.tce_aberto && !d.docs_entregues;
+    if(filtro==='indeferido')     return d.tce_indeferido;
     return true;
   });
   setText('est-lista-count', lista.length+' aluno(s)');
   _EST_SELECTED.clear(); setText('est-sel-count',0);
   var allChk=document.getElementById('est-check-all'); if(allChk) allChk.checked=false;
   var tb=document.getElementById('est-tabela-body'); if(!tb) return;
-  if(!lista.length){ tb.innerHTML='<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado para o filtro selecionado.</td></tr>'; return; }
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="11" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado para o filtro selecionado.</td></tr>'; return; }
   tb.innerHTML=lista.map(function(r){
     var d=TCE_DATA[r.COD_MATRICULA]||{};
     function chk(field,label){
@@ -7661,6 +7678,7 @@ function renderEstagio() {
       '<td style="padding:8px 12px;text-align:center">'+chk('tce_deferido','TCE foi deferido?')+'</td>'+
       '<td style="padding:8px 12px;text-align:center">'+chk('convalidacao','Há convalidação?')+'</td>'+
       '<td style="padding:8px 12px;text-align:center">'+chk('docs_entregues','Docs entregues na disciplina?')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('tce_indeferido','TCE indeferido?')+'</td>'+
       '<td style="padding:8px 12px"><input type="text" value="'+obsVal+'" placeholder="Observação..." style="width:140px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarOBSTCE(\''+r.COD_MATRICULA+'\',this.value)"></td>'+
       '<td style="padding:8px 12px"><button class="btn btn-sm" onclick="openModal(\''+r.COD_MATRICULA+'\')">👤</button></td>'+
       '</tr>';
@@ -7672,9 +7690,9 @@ function toggleTCEField(mat,field,val){
   TCE_DATA[mat][field]=val; _saveTCEData();
   // atualizar contadores
   var elegiveis=DB.filter(function(r){ var v=r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0; return v&&v!='0'&&v!==''&&v!=='N'&&v!=='NAO'&&v!=='NÃO'; });
-  var ca=0,cd=0,cp=0;
-  elegiveis.forEach(function(r){ var d=TCE_DATA[r.COD_MATRICULA]||{}; if(d.tce_aberto)ca++; if(d.tce_deferido)cd++; if(!d.tce_aberto)cp++; });
-  setText('est-cnt-aberto',ca); setText('est-cnt-deferido',cd); setText('est-cnt-pendente',cp);
+  var ca=0,cd=0,cp=0,ci=0;
+  elegiveis.forEach(function(r){ var d=TCE_DATA[r.COD_MATRICULA]||{}; if(d.tce_aberto)ca++; if(d.tce_deferido)cd++; if(!d.tce_aberto)cp++; if(d.tce_indeferido)ci++; });
+  setText('est-cnt-aberto',ca); setText('est-cnt-deferido',cd); setText('est-cnt-pendente',cp); setText('est-cnt-indeferido',ci);
 }
 
 function salvarOBSTCE(mat,obs){
@@ -7726,10 +7744,10 @@ function dispararLoteEstagio(){
 
 function exportarEstagioXLSX(){
   var elegiveis=DB.filter(function(r){ var v=r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0; return v&&v!='0'&&v!==''&&v!=='N'&&v!=='NAO'&&v!=='NÃO'; });
-  var rows=[['Matrícula','Nome','Curso','Elegível','TCE Aberto','TCE Deferido','Convalidação','Docs Entregues','Observação']];
+  var rows=[['Matrícula','Nome','Curso','Elegível','TCE Aberto','TCE Deferido','Indeferido','Convalidação','Docs Entregues','Observação']];
   elegiveis.forEach(function(r){
     var d=TCE_DATA[r.COD_MATRICULA]||{};
-    rows.push([r.COD_MATRICULA,cap(r.NOM_ALUNO),cap(r.NOM_CURSO||''),r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||'S',d.tce_aberto?'Sim':'Não',d.tce_deferido?'Sim':'Não',d.convalidacao?'Sim':'Não',d.docs_entregues?'Sim':'Não',d.obs||'']);
+    rows.push([r.COD_MATRICULA,cap(r.NOM_ALUNO),cap(r.NOM_CURSO||''),r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||'S',d.tce_aberto?'Sim':'Não',d.tce_deferido?'Sim':'Não',d.tce_indeferido?'Sim':'Não',d.convalidacao?'Sim':'Não',d.docs_entregues?'Sim':'Não',d.obs||'']);
   });
   var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
   var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
