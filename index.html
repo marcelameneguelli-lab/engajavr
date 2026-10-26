@@ -2214,8 +2214,8 @@ function fazerLoginApp() {
   if (errEl) errEl.style.display = 'none';
 
   email = email.trim().toLowerCase();
-  if (!email || !senha) {
-    if (errEl) { errEl.textContent = '⚠️ Preencha o e-mail e a senha.'; errEl.style.display = 'block'; }
+  if (!email) {
+    if (errEl) { errEl.textContent = '⚠️ Preencha o e-mail.'; errEl.style.display = 'block'; }
     return;
   }
 
@@ -2230,10 +2230,15 @@ function fazerLoginApp() {
     return;
   }
 
-  // Primeiro acesso ou senha temporária (senha vazia no cadastro)
+  // Primeiro acesso ou senha resetada: vai direto para criação de senha, mesmo sem preencher o campo
   if (!usuario.senha || usuario.primeiroAcesso) {
-    // Aceita qualquer senha para primeiro acesso → redireciona para troca
     _mostrarTrocaSenha(usuario, true);
+    return;
+  }
+
+  // Só agora exige que a senha tenha sido digitada
+  if (!senha) {
+    if (errEl) { errEl.textContent = '⚠️ Preencha a senha.'; errEl.style.display = 'block'; }
     return;
   }
 
