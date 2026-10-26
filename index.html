@@ -2129,12 +2129,41 @@ function _getUsuarios() {
     var raw = localStorage.getItem(_APP_USERS_KEY);
     if (raw) return JSON.parse(raw);
   } catch(e) {}
-  // Retorna admin padrão como único usuário inicial
   return [_ADMIN_PADRAO];
 }
 
 function _saveUsuarios(lista) {
   try { localStorage.setItem(_APP_USERS_KEY, JSON.stringify(lista)); } catch(e) {}
+  // Persiste no GAS como fonte central (sem aguardar)
+  if (GAS_URL) {
+    gasCall('saveUsuarios', { usuarios: lista }).catch(function(e) {
+      console.warn('[_saveUsuarios] falha ao salvar no GAS:', e);
+    });
+  }
+}
+
+// Carrega lista de usuários do GAS e atualiza o localStorage local
+async function _sincronizarUsuariosGAS() {
+  if (!GAS_URL) return;
+  try {
+    var r = await gasCall('getUsuarios');
+    if (r && r.ok && r.usuarios && r.usuarios.length > 0) {
+      // Mescla: mantém senhas locais se o GAS vier com senha vazia para o mesmo usuário
+      var local = _getUsuarios();
+      var localMap = {};
+      local.forEach(function(u) { localMap[u.email] = u; });
+      var merged = r.usuarios.map(function(u) {
+        var loc = localMap[u.email];
+        // Se o GAS tem senha, usa a do GAS; se não, mantém a local (mais recente)
+        if (!u.senha && loc && loc.senha) u.senha = loc.senha;
+        if (u.primeiroAcesso === undefined && loc) u.primeiroAcesso = loc.primeiroAcesso;
+        return u;
+      });
+      try { localStorage.setItem(_APP_USERS_KEY, JSON.stringify(merged)); } catch(e) {}
+    }
+  } catch(e) {
+    console.warn('[_sincronizarUsuariosGAS]', e);
+  }
 }
 
 function _verificarSessaoApp() {
@@ -2207,10 +2236,12 @@ function _atualizarTopbarUsuario() {
   });
 }
 
-function fazerLoginApp() {
+async function fazerLoginApp() {
   var email = (document.getElementById('lg-email') || {}).value || '';
   var senha = (document.getElementById('lg-senha') || {}).value || '';
   var errEl = document.getElementById('lock-error');
+  // Sincroniza lista de usuários do GAS antes de autenticar
+  await _sincronizarUsuariosGAS();
   if (errEl) errEl.style.display = 'none';
 
   email = email.trim().toLowerCase();
@@ -2411,6 +2442,8 @@ async function init() {
   loadTutoriais();
   // Verificar bases salvas em background (para mostrar status na aba Importar)
   verificarBasesSalvas().catch(function(){});
+  // Sincronizar lista de usuários do GAS imediatamente no init
+  _sincronizarUsuariosGAS().catch(function(){});
   // Sincronizar atendentes do GAS imediatamente no init
   if (GAS_URL) {
     gasCall('getAtendentes').then(function(r) {
