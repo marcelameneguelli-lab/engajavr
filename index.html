@@ -1781,7 +1781,9 @@ async function _sincronizarBaseGAS(base, db) {
       var slice = db.slice(p * CHUNK, (p + 1) * CHUNK);
       var r = await gasCall('salvarBase', { base: base, dados: slice, parte: p, total: partes });
       if (!r || !r.ok) {
-        showToast('⚠️ Falha ao sincronizar parte ' + (p+1) + '/' + partes + ' com o servidor.');
+        var motivo = (r && r.msg) ? r.msg : 'sem resposta do servidor';
+        showToast('⚠️ Falha ao sincronizar parte ' + (p+1) + '/' + partes + ': ' + motivo);
+        console.warn('[_sincronizarBaseGAS] parte ' + (p+1) + '/' + partes, r);
         return;
       }
     }
