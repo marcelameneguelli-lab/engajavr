@@ -745,6 +745,12 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </select>
       </div>
       <div class="filter-group">
+        <label>Curso</label>
+        <select id="f-curso" onchange="applyFilters()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label>Situação</label>
         <select id="f-sit" onchange="applyFilters()">
           <option value="">Todas</option>
@@ -2902,6 +2908,15 @@ function populateSemFilter() {
     selSit.innerHTML = '<option value="">Todas</option>' +
       sitVals.map(s => '<option value="' + s + '"' + (s === curSit ? ' selected' : '') + '>' + s + '</option>').join('');
   }
+
+  // Cursos — dinâmico por base, ordenado alfabeticamente
+  const selCurso = document.getElementById('f-curso');
+  if (selCurso) {
+    const curCurso = selCurso.value;
+    const cursos = [...new Set(DB.map(r => r.NOM_CURSO || '').filter(Boolean))].sort();
+    selCurso.innerHTML = '<option value="">Todos</option>' +
+      cursos.map(c => '<option value="' + c + '"' + (c === curCurso ? ' selected' : '') + '>' + cap(c) + '</option>').join('');
+  }
 }
 
 function applyFilters() {
@@ -2912,6 +2927,7 @@ function applyFilters() {
   const mod = document.getElementById('f-mod').value;
   const fin = document.getElementById('f-fin').value;
   const prop = document.getElementById('f-prop').value;
+  const curso = document.getElementById('f-curso') ? document.getElementById('f-curso').value : '';
   const sit = document.getElementById('f-sit').value;
   const acion = document.getElementById('f-acion').value;
   const formando = document.getElementById('f-formando') ? document.getElementById('f-formando').value : '';
@@ -2926,6 +2942,7 @@ function applyFilters() {
     if (mod && r.MODALIDADE_PP_PC !== mod) return false;
     if (fin !== '' && String(r.INADIMPLENTE) !== fin) return false;
     if (prop && r.PROPENSAO_EVASAO !== prop) return false;
+    if (curso && (r.NOM_CURSO || '') !== curso) return false;
     const rSit = r.NOM_SITUACAO_ALUNO || r.SITUACAO_ALUNO || '';
     if (sit && rSit !== sit) return false;
     // Filtro acionamento: considera apenas acionamentos da base ativa (semestre atual)
@@ -2957,7 +2974,7 @@ function applyFilters() {
 
 function clearFilters() {
   setPrio('');
-  ['f-search','f-periodo','f-tipo-curso','f-safra','f-mod','f-fin','f-prop','f-sit','f-acion','f-formando','f-trancamento'].forEach(id => {
+  ['f-search','f-periodo','f-tipo-curso','f-safra','f-mod','f-fin','f-prop','f-curso','f-sit','f-acion','f-formando','f-trancamento'].forEach(id => {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.value = ''; else el.value = '';
   });
@@ -7099,14 +7116,23 @@ function abrirLoteModal(titulo) {
   var motivoEl = document.getElementById('lote-motivo');
   var canalEl  = document.getElementById('lote-canal');
   var obsEl    = document.getElementById('lote-obs');
-  if (motivoEl) motivoEl.value = '';
-  if (canalEl)  canalEl.value  = '';
-  if (obsEl)    obsEl.value    = '';
+  // Pré-selecionar motivo e obs sugeridos por base
+  var _sugestaoBase = {
+    impar: { motivo: 'academico', canal: 'WhatsApp', obs: 'Boas-vindas Semestre Ímpar' },
+    par:   { motivo: 'academico', canal: 'WhatsApp', obs: 'Boas-vindas Semestre Par' },
+    ct:    { motivo: 'academico', canal: 'WhatsApp', obs: 'Boas-vindas Curso Técnico' }
+  };
+  var sug = _sugestaoBase[ACTIVE_BASE] || { motivo: 'academico', canal: 'WhatsApp', obs: '' };
+  if (motivoEl && !motivoEl.value) motivoEl.value = sug.motivo;
+  if (canalEl  && !canalEl.value)  canalEl.value  = sug.canal;
+  if (obsEl    && !obsEl.value)    obsEl.value     = sug.obs;
   if (prevEl)   prevEl.style.display = 'none';
   if (resEl)    { resEl.textContent = ''; resEl.style.display = 'none'; }
   // Preencher selects de atendente
   populateAtendSelects();
   document.getElementById('lote-overlay').style.display = 'flex';
+  // Atualizar preview com sugestão já preenchida
+  setTimeout(atualizarPreviewLote, 50);
 }
 
 function fecharLote() {
@@ -7277,16 +7303,14 @@ async function executarLote(canal) {
     } else {
       msg = buildMessage(r, motivo, canal) || '';
     }
-
-    if (canal === 'WhatsApp' && !tel)   { semContato.push(r.NOM_ALUNO); continue; }
-    if (canal === 'E-mail'   && !email) { semContato.push(r.NOM_ALUNO); continue; }
-    if (!msg) { semMsg.push(r.NOM_ALUNO); continue; }
+    if (!msg) msg = obs || ('Acionamento via lote — ' + motivo);
 
     var emailSubj = _emailSubjTpl
       ? substituirVarsEmail(_emailSubjTpl, r, atend)
       : ('[Estácio] ' + (motivo === 'financeiro' ? 'Pendência Financeira — ' + cap(r.NOM_CURSO) : 'Acompanhamento Acadêmico — ' + cap(r.NOM_CURSO)));
     var emailBody = msg;
 
+    // Registrar o acionamento no HISTORY para TODOS (independente de ter contato)
     if (!HISTORY[r.COD_MATRICULA]) HISTORY[r.COD_MATRICULA] = [];
     var entry = {
       datetime: datetime, date: date,
@@ -7296,21 +7320,22 @@ async function executarLote(canal) {
       matricula: r.COD_MATRICULA,
       base: ACTIVE_BASE
     };
-
+    HISTORY[r.COD_MATRICULA].push(entry);
+    loteEntries.push(entry);
     comSucesso.push(r.NOM_ALUNO);
 
     if (canal === 'WhatsApp') {
-      // WhatsApp: registra imediatamente
-      HISTORY[r.COD_MATRICULA].push(entry);
-      loteEntries.push(entry);
-      var waNum = tel.startsWith('55') ? tel : '55' + tel;
-      rows.push({ nome: cap(r.NOM_ALUNO), numero: waNum, mensagem: msg, matricula: r.COD_MATRICULA, curso: r.NOM_CURSO });
+      if (!tel) { semContato.push(r.NOM_ALUNO); }
+      else {
+        var waNum = tel.startsWith('55') ? tel : '55' + tel;
+        rows.push({ nome: cap(r.NOM_ALUNO), numero: waNum, mensagem: msg, matricula: r.COD_MATRICULA, curso: r.NOM_CURSO });
+      }
     }
     if (canal === 'E-mail') {
-      // E-mail: guarda pendente até "Registrar como enviados"
-      HISTORY[r.COD_MATRICULA].push(entry);
-      loteEntries.push(entry);
-      emailList.push({ email: email, nome: cap(r.NOM_ALUNO), msg: emailBody, subj: emailSubj, matricula: r.COD_MATRICULA, curso: cap(r.NOM_CURSO) });
+      if (!email) { semContato.push(r.NOM_ALUNO); }
+      else {
+        emailList.push({ email: email, nome: cap(r.NOM_ALUNO), msg: emailBody, subj: emailSubj, matricula: r.COD_MATRICULA, curso: cap(r.NOM_CURSO) });
+      }
     }
   }
 
