@@ -1187,6 +1187,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-sm" onclick="exportarEvasaoXLSX()" style="font-size:12px">📥 Exportar Excel</button>
+          <button class="btn btn-sm" onclick="_reimportarEvasaoBase()" style="font-size:12px" title="Re-importa da base alunos cancelados, trancados e com alta propensão de evasão ainda não registrados">🔄 Sincronizar base</button>
           <button class="btn btn-sm btn-primary" onclick="abrirModalEvasao(null)" style="font-size:12px">+ Registrar evasão</button>
         </div>
       </div>
@@ -7869,15 +7870,81 @@ function _saveEvasaoData() {
   if (GAS_URL) gasCall('saveEvasaoData', { base: ACTIVE_BASE, data: EVASAO_DATA }).catch(function(){});
 }
 
+function _importarAlunosevasaoDoDB() {
+  // Situações que indicam evasão confirmada ou em risco
+  var SIT_CANCELADO  = ['CANCELADO', 'CANCELAMENTO'];
+  var SIT_TRANCADO   = ['TRANCADO', 'TRANCAMENTO'];
+
+  // Mapa dos já registrados (por matrícula) para não duplicar
+  var matsRegistradas = new Set(EVASAO_DATA.map(function(e){ return e.mat; }));
+
+  var novos = [];
+  DB.forEach(function(r) {
+    var mat = r.COD_MATRICULA || '';
+    if (!mat || matsRegistradas.has(mat)) return; // já está registrado
+
+    var sit = (r.NOM_SITUACAO_ALUNO || r.SITUACAO_ALUNO || '').toUpperCase();
+    var prop = (r.PROPENSAO_EVASAO || '').toUpperCase();
+    var indicio = (r.INDICIO_EVASAO || '').toUpperCase();
+
+    var sitNorm = '';
+    if (SIT_CANCELADO.some(function(s){ return sit.includes(s); })) sitNorm = 'cancelado';
+    else if (SIT_TRANCADO.some(function(s){ return sit.includes(s); })) sitNorm = 'trancado';
+    else if (prop.includes('ALTO') || prop.includes('1 -') || indicio === 'SIM' || indicio === 'S') sitNorm = 'intencao';
+
+    if (!sitNorm) return; // aluno ativo sem risco, ignora
+
+    var div = parseFloat(String(r.DIVIDA || r.VLR_DIVIDA || r.VALOR_DIVIDA || '0').replace(',','.'));
+    novos.push({
+      id: 'ev_db_' + mat,
+      mat: mat,
+      nome: r.NOM_ALUNO || '',
+      curso: r.NOM_CURSO || '',
+      base: ACTIVE_BASE,
+      sit: sitNorm,
+      obj: '',       // objeção a ser preenchida pelo atendente
+      obs: '',
+      atend: '',
+      data: new Date().toISOString().slice(0,10),
+      divida: div > 0 ? div.toFixed(2).replace('.',',') : '',
+      _importado: true,
+      _ts: 0         // ts zero = pode ser sobrescrito por qualquer edição manual
+    });
+    matsRegistradas.add(mat);
+  });
+
+  if (novos.length > 0) {
+    EVASAO_DATA = EVASAO_DATA.concat(novos);
+    _saveEvasaoData();
+  }
+  return novos.length;
+}
+
 function _initEvasaoPage() {
   _loadEvasaoData();
+
   // Popula select de atendentes
   var sel = document.getElementById('ev-atend');
   if (sel) {
     var atds = ATENDENTES.length ? ATENDENTES : [];
     sel.innerHTML = '<option value="">Todos</option>' + atds.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
   }
+
+  // Importa da base automaticamente alunos evadidos/em risco ainda não registrados
+  var qtd = _importarAlunosevasaoDoDB();
+  if (qtd > 0) showToast('📥 ' + qtd + ' aluno(s) importado(s) automaticamente da base.');
+
   renderEvasao();
+}
+
+function _reimportarEvasaoBase() {
+  var qtd = _importarAlunosevasaoDoDB();
+  if (qtd > 0) {
+    renderEvasao();
+    showToast('📥 ' + qtd + ' novo(s) aluno(s) importado(s) da base.');
+  } else {
+    showToast('✅ Base já está sincronizada. Nenhum novo aluno a importar.');
+  }
 }
 
 function filtrarEvasaoCard(tipo) {
@@ -7977,7 +8044,7 @@ function renderEvasao() {
       '<td style="padding:9px 14px"><div style="font-weight:600;color:var(--text-primary)">'+(e.nome||'—')+'</div><div style="font-size:11px;color:var(--text3)">'+(e.mat||'')+(r?' · '+(r.NOM_CURSO||''):'')+'</div></td>' +
       '<td style="padding:9px 14px;font-size:12px">'+(r?r.NOM_CURSO||'—':'—')+'</td>' +
       '<td style="padding:9px 14px">'+(SIT_LABELS[e.sit]||e.sit||'—')+'</td>' +
-      '<td style="padding:9px 14px;font-size:12px">'+(e.obj||'—')+'</td>' +
+      '<td style="padding:9px 14px;font-size:12px">'+(e.obj||('<span style="color:var(--text3);font-style:italic">A preencher</span>'))+'</td>' +
       '<td style="padding:9px 14px;font-size:12px;color:var(--text3);max-width:200px">'+(e.obs||'—')+'</td>' +
       '<td style="padding:9px 14px;font-size:12px">'+(e.atend||'—')+'</td>' +
       '<td style="padding:9px 14px;font-size:12px;white-space:nowrap">'+(e.data?e.data.split('-').reverse().join('/'):'—')+'</td>' +
