@@ -660,6 +660,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="tab" onclick="showPage('financeiro')">💰 Financeiro</button>
     <button class="tab" onclick="showPage('evasao')" id="tab-evasao">🚪 Evasão</button>
     <button class="tab" onclick="showPage('estagio')">🎓 Estágio</button>
+    <button class="tab" onclick="showPage('polo')">🏫 Polo</button>
     <button class="tab" id="tab-importar" onclick="showPage('importar')">Importar</button>
     <button class="tab" onclick="showPage('admin')" style="margin-left:auto;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
@@ -763,10 +764,11 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </select>
       </div>
       <div class="filter-group">
-        <label>Criticidade SE</label>
+        <label>SE Socioemocional</label>
         <select id="f-crit-se" onchange="applyFilters()">
-          <option value="">Todas</option>
+          <option value="">Todos</option>
           <option value="pendente">Elegíveis sem SE</option>
+          <option value="fez">Fez o SE</option>
         </select>
       </div>
       <div class="filter-group">
@@ -1204,6 +1206,133 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
       </div>
     </div>
   </div><!-- fim page-estagio -->
+
+  <!-- POLO — Provas Presenciais -->
+  <div class="page" id="page-polo">
+    <div class="dash-page" style="max-width:100%;padding:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;margin:0">🏫 Provas no Polo</h2>
+          <div style="font-size:13px;color:var(--text3);margin-top:2px">Elegíveis a AV e AVS presenciais · adesão, agendamento e comparecimento</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="exportarPoloXLSX()">⬇️ Exportar XLSX</button>
+        </div>
+      </div>
+
+      <!-- Cards de resumo — clicáveis -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px">
+        <div style="background:#f3f0ff;border:1px solid #d0bfff;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('todos')">
+          <div style="font-size:26px;font-weight:800;color:#5433c4" id="polo-cnt-elegiveis">0</div>
+          <div style="font-size:10px;font-weight:700;color:#5433c4;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Total Elegíveis</div>
+        </div>
+        <div style="background:#fff9db;border:1px solid #ffd43b;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('sem_adesao')">
+          <div style="font-size:26px;font-weight:800;color:#854f0b" id="polo-cnt-sem-adesao">0</div>
+          <div style="font-size:10px;font-weight:700;color:#854f0b;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Não Agendaram</div>
+        </div>
+        <div style="background:#e3fafc;border:1px solid #99e9f2;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('agendado')">
+          <div style="font-size:26px;font-weight:800;color:#0b7285" id="polo-cnt-agendado">0</div>
+          <div style="font-size:10px;font-weight:700;color:#0b7285;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Agendados</div>
+        </div>
+        <div style="background:#ebfbee;border:1px solid #b2f2bb;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('compareceu')">
+          <div style="font-size:26px;font-weight:800;color:#276b35" id="polo-cnt-compareceu">0</div>
+          <div style="font-size:10px;font-weight:700;color:#276b35;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Compareceram</div>
+        </div>
+        <div style="background:#fff0f6;border:1px solid #faa2c1;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('faltou')">
+          <div style="font-size:26px;font-weight:800;color:#a61e4d" id="polo-cnt-faltou">0</div>
+          <div style="font-size:10px;font-weight:700;color:#a61e4d;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Faltaram</div>
+        </div>
+        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:26px;font-weight:800;color:#495057" id="polo-cnt-falta-agendar">0</div>
+          <div style="font-size:10px;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Falta Agendar</div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+        <div style="flex:1;min-width:150px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Tipo de Prova</label>
+          <select id="polo-filtro-tipo" class="search-input" onchange="renderPolo()" style="width:100%">
+            <option value="av">AV Presencial</option>
+            <option value="avs">AVS Presencial</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:150px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Situação</label>
+          <select id="polo-filtro-sit" class="search-input" onchange="renderPolo()" style="width:100%">
+            <option value="todos">Todos elegíveis</option>
+            <option value="sem_adesao">Não agendaram</option>
+            <option value="agendado">Agendados</option>
+            <option value="compareceu">Compareceram</option>
+            <option value="faltou">Faltaram (agendou e não compareceu)</option>
+            <option value="falta_agendar">Falta agendar (elegível mas sem agendamento)</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:150px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Curso</label>
+          <select id="polo-filtro-curso" class="search-input" onchange="renderPolo()" style="width:100%">
+            <option value="">Todos os cursos</option>
+          </select>
+        </div>
+        <div style="flex:2;min-width:200px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Busca</label>
+          <input type="text" id="polo-busca" class="search-input" placeholder="Nome ou matrícula..." oninput="renderPolo()" style="width:100%">
+        </div>
+        <div style="align-self:flex-end;font-size:12px;color:var(--text2);font-weight:600;padding-bottom:6px"><span id="polo-lista-count">0 aluno(s)</span></div>
+      </div>
+
+      <!-- Tabela -->
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:20px">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--surface)">
+              <th style="padding:10px 12px;border-bottom:2px solid var(--border)"><input type="checkbox" id="polo-check-all" onchange="toggleTodosPolo(this.checked)" title="Selecionar todos"></th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Aluno</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Matrícula</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Curso</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Modalidade</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Adesão Base</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#0b7285">Agendou?</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#276b35">Compareceu?</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#a61e4d">Faltou?</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Data agendamento</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Observação</th>
+              <th style="padding:10px 12px;border-bottom:2px solid var(--border)"></th>
+            </tr>
+          </thead>
+          <tbody id="polo-tabela-body">
+            <tr><td colspan="12" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Painel de disparo em lote -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text)">📨 Mensagem em lote — <span id="polo-sel-count" style="color:var(--primary)">0</span> selecionado(s)</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:160px">
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente</label>
+            <select id="polo-atend-sel" class="search-input" style="width:100%"><option value="">— selecione —</option></select>
+          </div>
+          <div style="flex:1;min-width:140px">
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Canal</label>
+            <select id="polo-canal-sel" class="search-input" onchange="atualizarTemplatePolo()" style="width:100%">
+              <option value="WhatsApp">💬 WhatsApp</option>
+              <option value="E-mail">✉️ E-mail</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Mensagem <span style="font-weight:400;font-size:10px;color:var(--text3);margin-left:6px">variáveis: {nome} {curso} {atendente} {tipo_prova}</span></label>
+          <textarea id="polo-msg-template" class="search-input" rows="3" style="width:100%;resize:vertical;font-family:inherit;font-size:13px" placeholder="Digite a mensagem..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="dispararLotePolo()">🚀 Disparar em lote</button>
+          <button class="btn btn-sm" onclick="atualizarTemplatePolo()">🔄 Sugerir mensagem</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- fim page-polo -->
 
   <!-- FINANCEIRO -->
   <!-- ===================== PÁGINA EVASÃO ===================== -->
@@ -2994,16 +3123,17 @@ function applyFilters() {
     // Filtro aproveitamento acadêmico
     if (aprov) {
       const av = (r.APROVEITAMENTO_ACADEMICO_ATUAL || '').trim();
-      if (aprov === '0%'    && av !== '0%')   return false;
+      const pct = parseInt(av, 10);
+      if (aprov === '0%'    && !(av === '0%' || av === '' || isNaN(pct) || pct === 0)) return false;
       if (aprov === '100%'  && av !== '100%') return false;
-      if (aprov === 'parcial') {
-        const pct = parseInt(av, 10);
-        if (isNaN(pct) || pct <= 0 || pct >= 100) return false;
-      }
+      if (aprov === 'parcial' && (isNaN(pct) || pct <= 0 || pct >= 100)) return false;
     }
-    // Filtro criticidade SE: "pendente" = elegíveis que não fizeram (NENHUMA ADESÃO)
-    if (critSE === 'pendente') {
-      if ((r['CRITICIDADE SE'] || '').trim() !== 'NENHUMA ADESÃO') return false;
+    // Filtro SE: usa ELEGIVEL_SE e ADESAO_SE
+    if (critSE) {
+      const seElig = r['ELEGIVEL_SE']===1||r['ELEGIVEL_SE']==='1'||parseFloat(r['ELEGIVEL_SE'])===1;
+      const seFez  = r['ADESAO_SE']==='fez'||r['ADESAO_SE']==='100%'||r['ADESAO_SE']===1||r['ADESAO_SE']==='1'||parseFloat(r['ADESAO_SE'])===1;
+      if (critSE === 'pendente' && !(seElig && !seFez)) return false;
+      if (critSE === 'fez'      && !(seElig && seFez))  return false;
     }
     return true;
   });
@@ -5554,6 +5684,7 @@ function showPage(p) {
   if (p === 'financeiro') _initFinanceiro();
   if (p === 'evasao')     _initEvasaoPage();
   if (p === 'estagio')    _initEstagio();
+  if (p === 'polo')       _initPolo();
   if (p === 'relatorio')  _initRelatorio();
   if (p === 'admin')      _initAdmin();
 }
@@ -8715,6 +8846,240 @@ function exportarEstagioXLSX(){
   var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='estagio_tce.csv'; a.click(); URL.revokeObjectURL(url);
 }
+
+// ========== POLO — PROVAS PRESENCIAIS ==========
+var _POLO_STORAGE_KEY = 'crm_polo_data';
+var POLO_DATA = {};
+var _POLO_SELECTED = new Set();
+
+function _loadPoloData() {
+  try { POLO_DATA = JSON.parse(localStorage.getItem(_POLO_STORAGE_KEY)||'{}'); } catch(e){ POLO_DATA={}; }
+  if (GAS_URL) {
+    gasCall('loadPoloData', { base: ACTIVE_BASE }).then(function(res){
+      if (res && res.data) {
+        Object.keys(res.data).forEach(function(mat){
+          var remoto = res.data[mat], local = POLO_DATA[mat];
+          if (!local) { POLO_DATA[mat] = remoto; return; }
+          var tsR = remoto._ts||0, tsL = local._ts||0;
+          if (tsR > tsL) POLO_DATA[mat] = remoto;
+        });
+        try { localStorage.setItem(_POLO_STORAGE_KEY, JSON.stringify(POLO_DATA)); } catch(e) {}
+        renderPolo();
+      }
+    }).catch(function(){});
+  }
+}
+
+function _savePoloData() {
+  try { localStorage.setItem(_POLO_STORAGE_KEY, JSON.stringify(POLO_DATA)); } catch(e) {}
+  if (GAS_URL) {
+    gasCall('savePoloData', { base: ACTIVE_BASE, data: POLO_DATA }).catch(function(e){
+      console.warn('[_savePoloData] falha GAS:', e);
+    });
+  }
+}
+
+function _initPolo() {
+  _loadPoloData();
+  var sel = document.getElementById('polo-atend-sel');
+  if (sel && ATENDENTES) {
+    sel.innerHTML = '<option value="">— selecione —</option>' +
+      ATENDENTES.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
+  }
+  var cursos = [];
+  if (DB && DB.length) {
+    DB.forEach(function(r){
+      if (!isEligPolo(r,'av') && !isEligPolo(r,'avs')) return;
+      var c = (r.NOM_CURSO||'').trim(); if (c && !cursos.includes(c)) cursos.push(c);
+    });
+  }
+  cursos.sort();
+  var selC = document.getElementById('polo-filtro-curso');
+  if (selC) {
+    selC.innerHTML = '<option value="">Todos os cursos</option>' +
+      cursos.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+  }
+  _POLO_SELECTED.clear();
+  atualizarTemplatePolo();
+  renderPolo();
+}
+
+function isEligPolo(r, tipo) {
+  var col = tipo==='avs' ? 'ELEGIVEL_AVS_DISC_PRES' : 'ELEGIVEL_AV_DISC_PRES';
+  var v = r[col];
+  return v===1||v==='1'||parseFloat(v)===1;
+}
+
+function getAdesaoPolo(r, tipo) {
+  var col = tipo==='avs' ? 'ADESAO_AVS_DISC_PRES' : 'ADESAO_AV_DISC_PRES';
+  var v = r[col];
+  if (v==='fez'||v==='100%'||v===1||v==='1'||parseFloat(v)===1) return 'fez';
+  if (v==='parcial'||v==='PARCIAL') return 'parcial';
+  return '';
+}
+
+function filtrarPoloPage(tipo) {
+  var el = document.getElementById('polo-filtro-sit');
+  if (el) el.value = tipo;
+  renderPolo();
+}
+
+function renderPolo() {
+  if (!DB || !DB.length) {
+    var tb = document.getElementById('polo-tabela-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
+    return;
+  }
+  var tipo       = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
+  var filtroSit  = (document.getElementById('polo-filtro-sit')||{}).value||'todos';
+  var filtroCurso= ((document.getElementById('polo-filtro-curso')||{}).value||'').trim();
+  var busca      = ((document.getElementById('polo-busca')||{}).value||'').toLowerCase().trim();
+
+  var elegiveis = DB.filter(function(r){ return isEligPolo(r, tipo); });
+  var cntSemAdesao=0, cntAgendado=0, cntCompareceu=0, cntFaltou=0, cntFaltaAgendar=0;
+  elegiveis.forEach(function(r){
+    var d = POLO_DATA[r.COD_MATRICULA+':'+tipo]||{};
+    var adBase = getAdesaoPolo(r, tipo);
+    if (d.agendou) cntAgendado++;
+    if (d.compareceu) cntCompareceu++;
+    if (d.agendou && d.faltou) cntFaltou++;
+    if (!d.agendou && !adBase) { cntSemAdesao++; cntFaltaAgendar++; }
+  });
+  setText('polo-cnt-elegiveis', elegiveis.length);
+  setText('polo-cnt-sem-adesao', cntSemAdesao);
+  setText('polo-cnt-agendado', cntAgendado);
+  setText('polo-cnt-compareceu', cntCompareceu);
+  setText('polo-cnt-faltou', cntFaltou);
+  setText('polo-cnt-falta-agendar', cntFaltaAgendar);
+
+  var lista = elegiveis.filter(function(r){
+    var d = POLO_DATA[r.COD_MATRICULA+':'+tipo]||{};
+    var adBase = getAdesaoPolo(r, tipo);
+    if (filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
+    if (busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
+    if (filtroSit === 'sem_adesao')    return !d.agendou && !adBase;
+    if (filtroSit === 'agendado')      return d.agendou;
+    if (filtroSit === 'compareceu')    return d.compareceu;
+    if (filtroSit === 'faltou')        return d.agendou && d.faltou;
+    if (filtroSit === 'falta_agendar') return !d.agendou && !adBase;
+    return true;
+  });
+
+  setText('polo-lista-count', lista.length+' aluno(s)');
+  _POLO_SELECTED.clear(); setText('polo-sel-count',0);
+  var allChk=document.getElementById('polo-check-all'); if(allChk) allChk.checked=false;
+  var tb=document.getElementById('polo-tabela-body'); if(!tb) return;
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="12" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado.</td></tr>'; return; }
+
+  tb.innerHTML=lista.map(function(r){
+    var key = r.COD_MATRICULA+':'+tipo;
+    var d = POLO_DATA[key]||{};
+    var adBase = getAdesaoPolo(r, tipo);
+    var adLabel = adBase==='fez' ? '<span class="badge badge-green">Fez</span>' :
+                  adBase==='parcial' ? '<span class="badge badge-amber">Parcial</span>' :
+                  '<span class="badge badge-gray">—</span>';
+    function chk(field,label){
+      return '<input type="checkbox"'+(d[field]?' checked':'')+' title="'+label+'" onchange="togglePoloField(\''+key+'\',\''+field+'\',this.checked)">';
+    }
+    var dataVal = (d.data_agendamento||'').replace(/"/g,'&quot;');
+    var obsVal  = (d.obs||'').replace(/"/g,'&quot;');
+    return '<tr>'+
+      '<td style="padding:8px 12px"><input type="checkbox" class="polo-row-chk" data-mat="'+r.COD_MATRICULA+'" onchange="toggleSelectPolo(\''+r.COD_MATRICULA+'\',this.checked)"></td>'+
+      '<td style="padding:8px 12px;font-weight:600">'+cap(r.NOM_ALUNO)+'</td>'+
+      '<td style="padding:8px 12px;color:var(--text3)">'+r.COD_MATRICULA+'</td>'+
+      '<td style="padding:8px 12px;font-size:12px">'+cap(r.NOM_CURSO||'')+'</td>'+
+      '<td style="padding:8px 12px"><span class="badge badge-gray" style="font-size:10px">'+(r.MODALIDADE_PP_PC||'')+'</span></td>'+
+      '<td style="padding:8px 12px;text-align:center">'+adLabel+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('agendou','Agendou a prova?')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('compareceu','Compareceu à prova?')+'</td>'+
+      '<td style="padding:8px 12px;text-align:center">'+chk('faltou','Agendou mas não compareceu?')+'</td>'+
+      '<td style="padding:8px 12px"><input type="date" value="'+dataVal+'" style="height:28px;padding:0 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarDataPolo(\''+key+'\',this.value)"></td>'+
+      '<td style="padding:8px 12px"><input type="text" value="'+obsVal+'" placeholder="Observação..." style="width:130px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarObsPolo(\''+key+'\',this.value)"></td>'+
+      '<td style="padding:8px 12px"><button class="btn btn-sm" onclick="openModal(\''+r.COD_MATRICULA+'\')">👤</button></td>'+
+      '</tr>';
+  }).join('');
+}
+
+function togglePoloField(key,field,val){
+  if(!POLO_DATA[key]) POLO_DATA[key]={};
+  POLO_DATA[key][field]=val; POLO_DATA[key]._ts=Date.now();
+  if (field==='compareceu' && val) POLO_DATA[key].faltou=false;
+  if (field==='faltou' && val) POLO_DATA[key].compareceu=false;
+  _savePoloData(); renderPolo();
+}
+
+function salvarDataPolo(key,v){
+  if(!POLO_DATA[key]) POLO_DATA[key]={};
+  POLO_DATA[key].data_agendamento=v; POLO_DATA[key]._ts=Date.now(); _savePoloData();
+}
+
+function salvarObsPolo(key,v){
+  if(!POLO_DATA[key]) POLO_DATA[key]={};
+  POLO_DATA[key].obs=v; POLO_DATA[key]._ts=Date.now(); _savePoloData();
+}
+
+function toggleSelectPolo(mat,checked){
+  if(checked) _POLO_SELECTED.add(mat); else _POLO_SELECTED.delete(mat);
+  setText('polo-sel-count',_POLO_SELECTED.size);
+}
+
+function toggleTodosPolo(checked){
+  document.querySelectorAll('.polo-row-chk').forEach(function(cb){
+    cb.checked=checked; var m=cb.getAttribute('data-mat');
+    if(m){ if(checked) _POLO_SELECTED.add(m); else _POLO_SELECTED.delete(m); }
+  });
+  setText('polo-sel-count',_POLO_SELECTED.size);
+}
+
+function atualizarTemplatePolo(){
+  var canal = (document.getElementById('polo-canal-sel')||{}).value||'WhatsApp';
+  var tipo  = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
+  var tpLabel = tipo==='avs' ? 'AVS (Avaliação Substitutiva) presencial' : 'AV (Avaliação) presencial';
+  var el = document.getElementById('polo-msg-template'); if(!el) return;
+  if(canal==='WhatsApp'){
+    el.value='Olá {nome}! 📋\nInformamos que a *'+tpLabel+'* está disponível para agendamento no Polo.\nNão deixe para a última hora — agende com antecedência!\n{atendente} — Estácio Volta Redonda.';
+  } else {
+    el.value='Prezado(a) {nome},\n\nGostaríamos de informar que a '+tpLabel+' do seu curso {curso} está disponível para agendamento no Polo.\n\nOrientamos que realize o agendamento com antecedência para garantir disponibilidade.\n\nAtenciosamente,\n{atendente}\nEstácio Volta Redonda';
+  }
+}
+
+function dispararLotePolo(){
+  if(!_POLO_SELECTED.size){ showToast('⚠️ Selecione ao menos um aluno.'); return; }
+  var atend = (document.getElementById('polo-atend-sel')||{}).value||'';
+  var canal = (document.getElementById('polo-canal-sel')||{}).value||'WhatsApp';
+  var tipo  = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
+  var tpl   = (document.getElementById('polo-msg-template')||{}).value||'';
+  if(!tpl){ showToast('⚠️ Digite a mensagem primeiro.'); return; }
+  var alunos = DB.filter(function(r){ return _POLO_SELECTED.has(r.COD_MATRICULA); });
+  var delay=0;
+  alunos.forEach(function(r){
+    setTimeout(function(){
+      var tpLabel = tipo==='avs' ? 'AVS Presencial' : 'AV Presencial';
+      var msg = tpl.replace(/{nome}/g,cap(r.NOM_ALUNO)).replace(/{curso}/g,cap(r.NOM_CURSO||'')).replace(/{atendente}/g,atend||'Equipe Estácio').replace(/{tipo_prova}/g,tpLabel);
+      if(canal==='WhatsApp'){ var tel=(r.NUM_TELEF_CELULAR||r.NUM_TELEFONE||'').replace(/\D/g,''); if(tel) window.open('https://wa.me/55'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
+      else { var email=r.END_EMAIL||''; if(email) window.open('mailto:'+email+'?subject=Prova no Polo - '+tpLabel+'&body='+encodeURIComponent(msg),'_blank'); }
+    }, delay);
+    delay+=1500;
+  });
+  showToast('🚀 Disparando '+alunos.length+' mensagens via '+canal+'...');
+}
+
+function exportarPoloXLSX(){
+  var tipo = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
+  var tpLabel = tipo==='avs' ? 'AVS Presencial' : 'AV Presencial';
+  var elegiveis = DB.filter(function(r){ return isEligPolo(r, tipo); });
+  var rows=[['Matrícula','Nome','Curso','Modalidade','Tipo Prova','Adesão Base','Agendou','Compareceu','Faltou','Data Agendamento','Observação']];
+  elegiveis.forEach(function(r){
+    var key = r.COD_MATRICULA+':'+tipo;
+    var d = POLO_DATA[key]||{};
+    var adBase = getAdesaoPolo(r, tipo);
+    rows.push([r.COD_MATRICULA,cap(r.NOM_ALUNO),cap(r.NOM_CURSO||''),r.MODALIDADE_PP_PC||'',tpLabel,adBase||'Sem adesão',d.agendou?'Sim':'Não',d.compareceu?'Sim':'Não',d.faltou?'Sim':'Não',d.data_agendamento||'',d.obs||'']);
+  });
+  var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='polo_provas_presenciais.csv'; a.click(); URL.revokeObjectURL(url);
+}
+// ========== FIM POLO ==========
 
 function _initFinanceiro() {
   var sel = document.getElementById('fin-atend-sel');
