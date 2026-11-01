@@ -2023,6 +2023,10 @@ async function _sincronizarBaseGAS(base, db) {
         console.warn('[_sincronizarBaseGAS] parte ' + (p+1) + '/' + partes, r);
         return;
       }
+      // Na última parte, o GAS retorna o ts — salva localmente para não re-baixar desnecessariamente
+      if (p === partes - 1 && r.ts) {
+        try { localStorage.setItem('crm_base_ts_' + base, String(r.ts)); } catch(ex) {}
+      }
     }
     showToast('✅ Base "' + label + '" sincronizada com o servidor (' + total.toLocaleString('pt-BR') + ' alunos).');
   } catch(e) {
@@ -2038,6 +2042,37 @@ async function _carregarBaseGAS(base) {
     if (r && r.ok && r.dados && r.dados.length > 0) return r.dados;
   } catch(e) { console.warn('[_carregarBaseGAS]', e); }
   return null;
+}
+
+// Verifica se o GAS tem uma versão mais nova que a base local e atualiza em background
+async function _atualizarBasesDoGASEmBackground() {
+  if (!GAS_URL) return;
+  try {
+    // Busca timestamp de publicação no GAS para todas as bases
+    var bases = Object.keys(BASE_CONFIG);
+    for (var i = 0; i < bases.length; i++) {
+      var base = bases[i];
+      var r = await gasCall('getBaseTipo', { base: base });
+      if (!r || !r.ok || !r.ts) continue;
+      var tsServidor = r.ts;
+      var tsLocal = parseInt(localStorage.getItem('crm_base_ts_' + base) || '0');
+      if (tsServidor > tsLocal) {
+        // Servidor tem versão mais nova — baixa e atualiza
+        console.log('[sync] Base "' + base + '" atualizada no servidor (ts=' + tsServidor + '). Baixando...');
+        var dados = await _carregarBaseGAS(base);
+        if (dados && dados.length > 0) {
+          var cfg = BASE_CONFIG[base];
+          await saveDB(dados, cfg.storageDB);
+          try { localStorage.setItem('crm_base_ts_' + base, String(tsServidor)); } catch(e) {}
+          if (base === ACTIVE_BASE) {
+            DB = dados; FILTERED = [...DB];
+            updateTopCount(); applyFilters(); renderDashboard();
+            showToast('🔄 Base ' + (cfg.label||base) + ' atualizada do servidor — ' + dados.length.toLocaleString('pt-BR') + ' alunos.');
+          }
+        }
+      }
+    }
+  } catch(e) { console.warn('[_atualizarBasesDoGASEmBackground]', e); }
 }
 
 async function syncFromRemote() {
@@ -2586,15 +2621,21 @@ function _concluirLogin(usuario) {
   init().then(function() {
     if (DB && DB.length > 0) {
       showToast('✅ ' + DB.length.toLocaleString('pt-BR') + ' alunos carregados da base salva.');
+      // Mesmo com base local, verifica se o GAS tem versão mais recente
+      if (GAS_URL) {
+        _atualizarBasesDoGASEmBackground();
+      }
     } else if (GAS_URL) {
-      // Tentar carregar do GAS se local estiver vazio
+      // Base local vazia — busca do GAS
       showToast('🔄 Buscando base no servidor...');
       _carregarBaseGAS(ACTIVE_BASE).then(function(dados) {
         if (dados && dados.length > 0) {
           DB = dados; FILTERED = [...DB];
           saveDB(DB).catch(function(){});
+          // Salva timestamp local da versão recebida
+          try { localStorage.setItem('crm_base_ts_' + ACTIVE_BASE, String(Date.now())); } catch(e) {}
           updateTopCount(); applyFilters(); renderDashboard();
-          showToast('✅ ' + DB.length.toLocaleString('pt-BR') + ' alunos carregados do servidor.');
+          showToast('✅ ' + dados.length.toLocaleString('pt-BR') + ' alunos carregados do servidor.');
         } else {
           if (_podeImportar && _podeImportar()) {
             showToast('ℹ️ Nenhuma base encontrada. Importe um CSV na aba Importar.');
@@ -7891,7 +7932,8 @@ function fecharModalFinanceiro() {
 
 // ========== EVASÃO ==========
 var EVASAO_DATA = [];         // [{id, mat, nome, curso, sit, obj, obs, atend, data, divida, base}]
-var _EVASAO_KEY = 'crm_evasao_data';
+// Chave do localStorage é por base — evita misturar dados de semestres diferentes
+function _evasaoKey() { return 'crm_evasao_data_' + (ACTIVE_BASE || 'impar'); }
 var _evasaoFiltroCard = '';   // '' | 'cancelado' | 'trancado' | 'intencao' | 'revertido'
 var _evasaoModalMat = null;
 
@@ -7906,11 +7948,13 @@ function _mergeEvasao(remoto) {
     // se local mais recente, mantém local
   });
   EVASAO_DATA = Object.values(mapaLocal);
-  try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(ex) {}
+  try { localStorage.setItem(_evasaoKey(), JSON.stringify(EVASAO_DATA)); } catch(ex) {}
 }
 
 function _loadEvasaoData() {
-  try { var r = localStorage.getItem(_EVASAO_KEY); if (r) EVASAO_DATA = JSON.parse(r); } catch(e) { EVASAO_DATA = []; }
+  // Zera antes de carregar para não misturar com outra base
+  EVASAO_DATA = [];
+  try { var r = localStorage.getItem(_evasaoKey()); if (r) EVASAO_DATA = JSON.parse(r); } catch(e) { EVASAO_DATA = []; }
   if (GAS_URL) {
     gasCall('getEvasaoData', { base: ACTIVE_BASE }).then(function(r) {
       if (r && r.ok && Array.isArray(r.data)) {
@@ -7922,10 +7966,11 @@ function _loadEvasaoData() {
 }
 
 function _saveEvasaoData() {
-  try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(e) {}
+  try { localStorage.setItem(_evasaoKey(), JSON.stringify(EVASAO_DATA)); } catch(e) {}
   if (!GAS_URL) return;
-  // Envia apenas os registros desta base para o GAS mesclar server-side
-  gasCall('mergeEvasaoData', { base: ACTIVE_BASE, data: EVASAO_DATA }).catch(function(){});
+  // Envia apenas registros da base ativa para o GAS mesclar server-side
+  var dadosBase = EVASAO_DATA.filter(function(e){ return !e.base || e.base === ACTIVE_BASE; });
+  gasCall('mergeEvasaoData', { base: ACTIVE_BASE, data: dadosBase }).catch(function(){});
 }
 
 function _importarAlunosevasaoDoDB() {
