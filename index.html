@@ -7209,13 +7209,16 @@ function abrirLoteModal(titulo) {
   // Preencher atendentes
   populateAtendSelects();
 
+  // Mostrar overlay PRIMEIRO — antes de qualquer lógica que possa falhar
+  document.getElementById('lote-overlay').style.display = 'flex';
+
   // Canal padrão: WhatsApp
-  selecionarCanalLote('WhatsApp');
+  try { selecionarCanalLote('WhatsApp'); } catch(e) { console.warn('[lote] selecionarCanalLote', e); }
 
   // Aplicar modelo padrão
-  setTimeout(function() { aplicarModeloLote(); }, 30);
-
-  document.getElementById('lote-overlay').style.display = 'flex';
+  setTimeout(function() {
+    try { aplicarModeloLote(); } catch(e) { console.warn('[lote] aplicarModeloLote', e); }
+  }, 30);
 }
 
 function fecharLote() {
@@ -7261,55 +7264,59 @@ function inserirVarLote(variavel) {
 
 // Atualiza prévia, contador de destinatários e botão de ação
 function atualizarPreviewLote() {
-  var canal   = _LOTE_CANAL;
-  var msgTpl  = (document.getElementById('lote-email-msg')  || {}).value || '';
-  var subjTpl = (document.getElementById('lote-email-subj') || {}).value || '';
-  var atend   = (document.getElementById('lote-atend') || {}).value || '';
+  try {
+    var canal   = _LOTE_CANAL || 'WhatsApp';
+    var msgTpl  = (document.getElementById('lote-email-msg')  || {}).value || '';
+    var subjTpl = (document.getElementById('lote-email-subj') || {}).value || '';
+    var atend   = (document.getElementById('lote-atend') || {}).value || '';
 
-  // Prévia
-  var prevEl = document.getElementById('lote-preview-box');
-  if (prevEl) {
-    if (!LOTE_ALUNOS.length) {
-      prevEl.textContent = 'Nenhum aluno selecionado.';
-    } else if (!msgTpl.trim()) {
-      prevEl.textContent = 'Selecione um modelo ou escreva a mensagem.';
-    } else {
-      var r = LOTE_ALUNOS[0];
-      var msgResolvida = substituirVarsEmail(msgTpl, r, atend);
-      if (canal === 'E-mail' && subjTpl) {
-        prevEl.textContent = 'Assunto: ' + substituirVarsEmail(subjTpl, r, atend) + '\n\n' + msgResolvida;
+    // Prévia
+    var prevEl = document.getElementById('lote-preview-box');
+    if (prevEl) {
+      if (!LOTE_ALUNOS || !LOTE_ALUNOS.length) {
+        prevEl.textContent = 'Nenhum aluno selecionado.';
+      } else if (!msgTpl.trim()) {
+        prevEl.textContent = 'Selecione um modelo ou escreva a mensagem.';
       } else {
-        prevEl.textContent = msgResolvida;
+        var r = LOTE_ALUNOS[0];
+        var msgResolvida = substituirVarsEmail(msgTpl, r, atend);
+        if (canal === 'E-mail' && subjTpl) {
+          prevEl.textContent = 'Assunto: ' + substituirVarsEmail(subjTpl, r, atend) + '\n\n' + msgResolvida;
+        } else {
+          prevEl.textContent = msgResolvida;
+        }
       }
     }
-  }
 
-  // Contador
-  var countBarEl = document.getElementById('lote-count-bar');
-  if (countBarEl && LOTE_ALUNOS.length) {
-    var hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-    var semContato = 0, jaHoje = 0;
-    LOTE_ALUNOS.forEach(function(a) {
-      var c = CONTACTS[a.COD_MATRICULA] || {};
-      if (canal === 'WhatsApp') {
-        var tel = (c.cel || a.NUM_TELEF_CELULAR || '').replace(/\D/g,'');
-        if (!tel) semContato++;
-      } else {
-        var email = c.email || a.END_EMAIL || '';
-        if (!email) semContato++;
-      }
-      // Verificar se já recebeu hoje por este canal
-      var hist = HISTORY[a.COD_MATRICULA] || [];
-      if (hist.some(function(h){ return h.date && h.date.replace(/\//g,'-') === hoje && h.canal === canal; })) jaHoje++;
-    });
-    var vaoReceber = LOTE_ALUNOS.length - semContato;
-    var partes = [];
-    partes.push('<strong>' + vaoReceber + '</strong> vão receber');
-    if (semContato > 0) partes.push('<span style="color:#e67700">' + semContato + ' sem ' + (canal === 'WhatsApp' ? 'número' : 'e-mail') + '</span>');
-    if (jaHoje > 0)    partes.push('<span style="color:#087f5b">' + jaHoje + ' já receberam hoje</span>');
-    countBarEl.innerHTML = partes.join(' · ');
-  } else if (countBarEl) {
-    countBarEl.innerHTML = '—';
+    // Contador
+    var countBarEl = document.getElementById('lote-count-bar');
+    if (countBarEl && LOTE_ALUNOS && LOTE_ALUNOS.length) {
+      var hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+      var semContato = 0, jaHoje = 0;
+      LOTE_ALUNOS.forEach(function(a) {
+        if (!a) return;
+        var c = (CONTACTS && CONTACTS[a.COD_MATRICULA]) || {};
+        if (canal === 'WhatsApp') {
+          var tel = (c.cel || a.NUM_TELEF_CELULAR || '').replace(/\D/g,'');
+          if (!tel) semContato++;
+        } else {
+          var emailAddr = c.email || a.END_EMAIL || '';
+          if (!emailAddr) semContato++;
+        }
+        var hist = (HISTORY && HISTORY[a.COD_MATRICULA]) || [];
+        if (hist.some(function(h){ return h.date && h.date.replace(/\//g,'-') === hoje && h.canal === canal; })) jaHoje++;
+      });
+      var vaoReceber = LOTE_ALUNOS.length - semContato;
+      var partes = [];
+      partes.push('<strong>' + vaoReceber + '</strong> vão receber');
+      if (semContato > 0) partes.push('<span style="color:#e67700">' + semContato + ' sem ' + (canal === 'WhatsApp' ? 'número' : 'e-mail') + '</span>');
+      if (jaHoje > 0)    partes.push('<span style="color:#087f5b">' + jaHoje + ' já receberam hoje</span>');
+      countBarEl.innerHTML = partes.join(' · ');
+    } else if (countBarEl) {
+      countBarEl.innerHTML = '—';
+    }
+  } catch(e) {
+    console.warn('[atualizarPreviewLote]', e);
   }
 }
 
