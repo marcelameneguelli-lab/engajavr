@@ -8911,11 +8911,29 @@ function isEligPolo(r, tipo) {
 }
 
 function getAdesaoPolo(r, tipo) {
+  // Retorna o que a base registra: 'fez', 'parcial' ou ''
   var col = tipo==='avs' ? 'ADESAO_AVS_DISC_PRES' : 'ADESAO_AV_DISC_PRES';
   var v = r[col];
   if (v==='fez'||v==='100%'||v===1||v==='1'||parseFloat(v)===1) return 'fez';
   if (v==='parcial'||v==='PARCIAL') return 'parcial';
   return '';
+}
+
+// Situação consolidada: combina dado da base com anotação manual
+// Retorna: 'compareceu' | 'faltou' | 'agendado' | 'nao_agendou'
+function getSituacaoPolo(r, tipo) {
+  var adBase = getAdesaoPolo(r, tipo);
+  var d = POLO_DATA[r.COD_MATRICULA+':'+tipo]||{};
+  // Base diz que fez → compareceu
+  if (adBase === 'fez') return 'compareceu';
+  // Manual: agendou + marcou faltou
+  if (d.agendou && d.faltou) return 'faltou';
+  // Manual: agendou + marcou compareceu
+  if (d.agendou && d.compareceu) return 'compareceu';
+  // Base parcial ou manual agendou (sem resultado ainda)
+  if (adBase === 'parcial' || d.agendou) return 'agendado';
+  // Nenhuma adesão
+  return 'nao_agendou';
 }
 
 function filtrarPoloPage(tipo) {
@@ -8938,12 +8956,11 @@ function renderPolo() {
   var elegiveis = DB.filter(function(r){ return isEligPolo(r, tipo); });
   var cntSemAdesao=0, cntAgendado=0, cntCompareceu=0, cntFaltou=0, cntFaltaAgendar=0;
   elegiveis.forEach(function(r){
-    var d = POLO_DATA[r.COD_MATRICULA+':'+tipo]||{};
-    var adBase = getAdesaoPolo(r, tipo);
-    if (d.agendou) cntAgendado++;
-    if (d.compareceu) cntCompareceu++;
-    if (d.agendou && d.faltou) cntFaltou++;
-    if (!d.agendou && !adBase) { cntSemAdesao++; cntFaltaAgendar++; }
+    var sit = getSituacaoPolo(r, tipo);
+    if (sit === 'compareceu')  cntCompareceu++;
+    else if (sit === 'faltou') cntFaltou++;
+    else if (sit === 'agendado') cntAgendado++;
+    else { cntSemAdesao++; cntFaltaAgendar++; }
   });
   setText('polo-cnt-elegiveis', elegiveis.length);
   setText('polo-cnt-sem-adesao', cntSemAdesao);
@@ -8953,15 +8970,14 @@ function renderPolo() {
   setText('polo-cnt-falta-agendar', cntFaltaAgendar);
 
   var lista = elegiveis.filter(function(r){
-    var d = POLO_DATA[r.COD_MATRICULA+':'+tipo]||{};
-    var adBase = getAdesaoPolo(r, tipo);
+    var sit = getSituacaoPolo(r, tipo);
     if (filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
     if (busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
-    if (filtroSit === 'sem_adesao')    return !d.agendou && !adBase;
-    if (filtroSit === 'agendado')      return d.agendou;
-    if (filtroSit === 'compareceu')    return d.compareceu;
-    if (filtroSit === 'faltou')        return d.agendou && d.faltou;
-    if (filtroSit === 'falta_agendar') return !d.agendou && !adBase;
+    if (filtroSit === 'sem_adesao')    return sit === 'nao_agendou';
+    if (filtroSit === 'agendado')      return sit === 'agendado';
+    if (filtroSit === 'compareceu')    return sit === 'compareceu';
+    if (filtroSit === 'faltou')        return sit === 'faltou';
+    if (filtroSit === 'falta_agendar') return sit === 'nao_agendou';
     return true;
   });
 
@@ -8972,15 +8988,24 @@ function renderPolo() {
   if(!lista.length){ tb.innerHTML='<tr><td colspan="12" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado.</td></tr>'; return; }
 
   tb.innerHTML=lista.map(function(r){
-    var key = r.COD_MATRICULA+':'+tipo;
-    var d = POLO_DATA[key]||{};
+    var key    = r.COD_MATRICULA+':'+tipo;
+    var d      = POLO_DATA[key]||{};
     var adBase = getAdesaoPolo(r, tipo);
-    var adLabel = adBase==='fez' ? '<span class="badge badge-green">Fez</span>' :
-                  adBase==='parcial' ? '<span class="badge badge-amber">Parcial</span>' :
-                  '<span class="badge badge-gray">—</span>';
-    function chk(field,label){
-      return '<input type="checkbox"'+(d[field]?' checked':'')+' title="'+label+'" onchange="togglePoloField(\''+key+'\',\''+field+'\',this.checked)">';
-    }
+    var sit    = getSituacaoPolo(r, tipo);
+
+    // Badge de situação consolidada
+    var sitLabel =
+      sit==='compareceu' ? '<span class="badge badge-green">✔ Compareceu</span>' :
+      sit==='faltou'     ? '<span class="badge badge-red">✘ Faltou</span>' :
+      sit==='agendado'   ? '<span class="badge" style="background:#e7f5ff;color:#1864ab;border:1px solid #a5d8ff">📅 Agendado</span>' :
+                           '<span class="badge badge-gray">— Não agendou</span>';
+
+    // Checkboxes refletem estado consolidado; base "fez" desabilita edição
+    var disBase  = adBase==='fez' ? ' disabled' : '';
+    var chkAg    = (adBase==='fez'||adBase==='parcial'||d.agendou)  ? ' checked' : '';
+    var chkComp  = (adBase==='fez'||d.compareceu)                   ? ' checked' : '';
+    var chkFalt  = (!adBase && d.agendou && d.faltou)               ? ' checked' : '';
+
     var dataVal = (d.data_agendamento||'').replace(/"/g,'&quot;');
     var obsVal  = (d.obs||'').replace(/"/g,'&quot;');
     return '<tr>'+
@@ -8989,10 +9014,10 @@ function renderPolo() {
       '<td style="padding:8px 12px;color:var(--text3)">'+r.COD_MATRICULA+'</td>'+
       '<td style="padding:8px 12px;font-size:12px">'+cap(r.NOM_CURSO||'')+'</td>'+
       '<td style="padding:8px 12px"><span class="badge badge-gray" style="font-size:10px">'+(r.MODALIDADE_PP_PC||'')+'</span></td>'+
-      '<td style="padding:8px 12px;text-align:center">'+adLabel+'</td>'+
-      '<td style="padding:8px 12px;text-align:center">'+chk('agendou','Agendou a prova?')+'</td>'+
-      '<td style="padding:8px 12px;text-align:center">'+chk('compareceu','Compareceu à prova?')+'</td>'+
-      '<td style="padding:8px 12px;text-align:center">'+chk('faltou','Agendou mas não compareceu?')+'</td>'+
+      '<td style="padding:8px 12px">'+sitLabel+'</td>'+
+      '<td style="padding:8px 12px;text-align:center"><input type="checkbox"'+chkAg+disBase+' title="Agendou?" onchange="togglePoloField(\''+key+'\',\'agendou\',this.checked)"></td>'+
+      '<td style="padding:8px 12px;text-align:center"><input type="checkbox"'+chkComp+disBase+' title="Compareceu?" onchange="togglePoloField(\''+key+'\',\'compareceu\',this.checked)"></td>'+
+      '<td style="padding:8px 12px;text-align:center"><input type="checkbox"'+chkFalt+(adBase==='fez'?' disabled':'')+' title="Agendou e faltou?" onchange="togglePoloField(\''+key+'\',\'faltou\',this.checked)"></td>'+
       '<td style="padding:8px 12px"><input type="date" value="'+dataVal+'" style="height:28px;padding:0 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarDataPolo(\''+key+'\',this.value)"></td>'+
       '<td style="padding:8px 12px"><input type="text" value="'+obsVal+'" placeholder="Observação..." style="width:130px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarObsPolo(\''+key+'\',this.value)"></td>'+
       '<td style="padding:8px 12px"><button class="btn btn-sm" onclick="openModal(\''+r.COD_MATRICULA+'\')">👤</button></td>'+
