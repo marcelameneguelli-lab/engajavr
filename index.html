@@ -1216,6 +1216,35 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </div>
       </div>
 
+      <!-- Cards analíticos -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px" id="ev-cards-analise">
+        <!-- Por semestre -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Por Semestre</div>
+          <div id="ev-por-semestre"><div style="color:var(--text3);font-size:12px">—</div></div>
+        </div>
+        <!-- Por modalidade -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Por Modalidade</div>
+          <div id="ev-por-modalidade"><div style="color:var(--text3);font-size:12px">—</div></div>
+        </div>
+        <!-- Por safra -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Por Safra (Ingresso)</div>
+          <div id="ev-por-safra"><div style="color:var(--text3);font-size:12px">—</div></div>
+        </div>
+        <!-- Principais objeções -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Principais Objeções</div>
+          <div id="ev-por-objecao"><div style="color:var(--text3);font-size:12px">—</div></div>
+        </div>
+      </div>
+      <!-- Top cursos (largura total) -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:20px">
+        <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Top Cursos</div>
+        <div id="ev-por-curso"><div style="color:var(--text3);font-size:12px">—</div></div>
+      </div>
+
       <!-- Filtros -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         <div>
@@ -8007,7 +8036,85 @@ function renderEvasao() {
   setText('ev-cnt-intencao',  base.filter(function(e){return e.sit==='intencao';}).length);
   setText('ev-cnt-revertido', base.filter(function(e){return e.sit==='revertido';}).length);
 
-  // Análise por objeção
+  // ── Cards analíticos (usam base completa, sem filtros) ──
+  var _evBarItem = function(label, qtd, total, cor) {
+    var pct = total > 0 ? Math.round(qtd/total*100) : 0;
+    return '<div style="margin-bottom:7px">' +
+      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">' +
+      '<span style="color:var(--text-primary);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%">' + label + '</span>' +
+      '<span style="color:var(--text3);font-size:11px;white-space:nowrap">' + qtd + ' <span style="font-size:10px">(' + pct + '%)</span></span></div>' +
+      '<div style="background:var(--border);border-radius:4px;height:5px"><div style="background:' + cor + ';width:' + pct + '%;height:5px;border-radius:4px"></div></div></div>';
+  };
+
+  // Por semestre
+  var semMap = { impar:'Semestre Ímpar 🔵', par:'Semestre Par 🟢', ct:'Curso Técnico 🔴' };
+  var semCores = { impar:'#4dabf7', par:'#69db7c', ct:'#ff6b6b' };
+  var semCnt = {};
+  base.forEach(function(e){ var s=e.base||'impar'; semCnt[s]=(semCnt[s]||0)+1; });
+  var semEl = document.getElementById('ev-por-semestre');
+  if (semEl) semEl.innerHTML = Object.keys(semCnt).length ?
+    Object.keys(semCnt).sort(function(a,b){return semCnt[b]-semCnt[a];}).map(function(s){
+      return _evBarItem(semMap[s]||s, semCnt[s], base.length, semCores[s]||'#aaa');
+    }).join('') : '<div style="color:var(--text3);font-size:12px">—</div>';
+
+  // Por modalidade
+  var modCnt = {};
+  base.forEach(function(e){
+    var r=DB.find(function(x){return x.COD_MATRICULA===e.mat;});
+    var mod=(r&&(r.NOM_MODALIDADE||r.MODALIDADE||r.MOD_ENSINO||''))||'Não identificado';
+    modCnt[mod]=(modCnt[mod]||0)+1;
+  });
+  var modEl = document.getElementById('ev-por-modalidade');
+  if (modEl) modEl.innerHTML = Object.keys(modCnt).length ?
+    Object.keys(modCnt).sort(function(a,b){return modCnt[b]-modCnt[a];}).map(function(m){
+      return _evBarItem(m, modCnt[m], base.length, '#cc5de8');
+    }).join('') : '<div style="color:var(--text3);font-size:12px">—</div>';
+
+  // Por safra
+  var safraCnt = {};
+  base.forEach(function(e){
+    var r=DB.find(function(x){return x.COD_MATRICULA===e.mat;});
+    var s=(r&&(r.ANO_INGRESSO||r.SAFRA||r.ANO_ENTRADA||''))||'';
+    if (!s && r) { var m2=String(r.COD_MATRICULA||'').match(/^(20\d\d)/); s=m2?m2[1]:''; }
+    s=s||'Não identificado';
+    safraCnt[s]=(safraCnt[s]||0)+1;
+  });
+  var safraEl = document.getElementById('ev-por-safra');
+  if (safraEl) safraEl.innerHTML = Object.keys(safraCnt).length ?
+    Object.keys(safraCnt).sort(function(a,b){
+      if(a==='Não identificado')return 1; if(b==='Não identificado')return -1;
+      return b.localeCompare(a)||safraCnt[b]-safraCnt[a];
+    }).map(function(s){ return _evBarItem(s, safraCnt[s], base.length, '#f76707'); }).join('') :
+    '<div style="color:var(--text3);font-size:12px">—</div>';
+
+  // Principais objeções (card)
+  var objCardCnt = {};
+  base.forEach(function(e){ if(e.obj) objCardCnt[e.obj]=(objCardCnt[e.obj]||0)+1; });
+  var totalComObj = Object.values(objCardCnt).reduce(function(a,b){return a+b;},0);
+  var objCardEl = document.getElementById('ev-por-objecao');
+  if (objCardEl) objCardEl.innerHTML = totalComObj ?
+    Object.keys(objCardCnt).sort(function(a,b){return objCardCnt[b]-objCardCnt[a];}).slice(0,6).map(function(o){
+      return _evBarItem(o, objCardCnt[o], totalComObj, '#20c997');
+    }).join('') :
+    '<div style="color:var(--text3);font-size:12px;font-style:italic">Nenhuma objeção registrada ainda.</div>';
+
+  // Top cursos (grid largo)
+  var cursoCnt = {};
+  base.forEach(function(e){
+    var r=DB.find(function(x){return x.COD_MATRICULA===e.mat;});
+    var c=(r&&r.NOM_CURSO)||e.curso||'Não identificado';
+    cursoCnt[c]=(cursoCnt[c]||0)+1;
+  });
+  var cursoEl = document.getElementById('ev-por-curso');
+  if (cursoEl) {
+    var cursoKeys=Object.keys(cursoCnt).sort(function(a,b){return cursoCnt[b]-cursoCnt[a];}).slice(0,8);
+    cursoEl.innerHTML = cursoKeys.length ?
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 24px">' +
+      cursoKeys.map(function(c){ return _evBarItem(c,cursoCnt[c],base.length,'#4dabf7'); }).join('') + '</div>' :
+      '<div style="color:var(--text3);font-size:12px">—</div>';
+  }
+
+  // Análise objeção × situação (tabela)
   var objMap = {};
   registros.forEach(function(e){ var o=e.obj||'Sem objeção registrada'; objMap[o]=(objMap[o]||0)+1; });
   var objRows = Object.keys(objMap).sort(function(a,b){ return objMap[b]-objMap[a]; });
@@ -8023,19 +8130,14 @@ function renderEvasao() {
     '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#c92a2a">Total</th>' +
     '</tr></thead><tbody>' +
     objRows.map(function(o) {
-      var rs = registros.filter(function(e){ return (e.obj||'Sem objeção registrada')===o; });
-      var can=rs.filter(function(e){return e.sit==='cancelado';}).length;
-      var tra=rs.filter(function(e){return e.sit==='trancado';}).length;
-      var int=rs.filter(function(e){return e.sit==='intencao';}).length;
-      var rev=rs.filter(function(e){return e.sit==='revertido';}).length;
+      var rs=registros.filter(function(e){return(e.obj||'Sem objeção registrada')===o;});
       return '<tr style="border-top:1px solid var(--border)">' +
-        '<td style="padding:8px 12px;font-weight:500">' + o + '</td>' +
-        '<td style="padding:8px 12px;text-align:center;color:#e67700">' + (can||'—') + '</td>' +
-        '<td style="padding:8px 12px;text-align:center;color:#a61e4d">' + (tra||'—') + '</td>' +
-        '<td style="padding:8px 12px;text-align:center;color:#5f3dc4">' + (int||'—') + '</td>' +
-        '<td style="padding:8px 12px;text-align:center;color:#2b8a3e">' + (rev||'—') + '</td>' +
-        '<td style="padding:8px 12px;text-align:center;font-weight:700;color:#c92a2a">' + rs.length + '</td>' +
-        '</tr>';
+        '<td style="padding:8px 12px;font-weight:500">'+o+'</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#e67700">'+(rs.filter(function(e){return e.sit==='cancelado';}).length||'—')+'</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#a61e4d">'+(rs.filter(function(e){return e.sit==='trancado';}).length||'—')+'</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#5f3dc4">'+(rs.filter(function(e){return e.sit==='intencao';}).length||'—')+'</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#2b8a3e">'+(rs.filter(function(e){return e.sit==='revertido';}).length||'—')+'</td>' +
+        '<td style="padding:8px 12px;text-align:center;font-weight:700;color:#c92a2a">'+rs.length+'</td></tr>';
     }).join('') + '</tbody></table></div>'
   ) : '';
   var analiseEl = document.getElementById('ev-analise');
