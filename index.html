@@ -7846,19 +7846,26 @@ var _EVASAO_KEY = 'crm_evasao_data';
 var _evasaoFiltroCard = '';   // '' | 'cancelado' | 'trancado' | 'intencao' | 'revertido'
 var _evasaoModalMat = null;
 
+function _mergeEvasao(remoto) {
+  // Mescla remoto + local: para cada id, vence quem tem _ts maior
+  var mapaLocal = {};
+  EVASAO_DATA.forEach(function(e){ mapaLocal[e.id] = e; });
+  remoto.forEach(function(e) {
+    var local = mapaLocal[e.id];
+    if (!local) { mapaLocal[e.id] = e; }
+    else if ((e._ts||0) > (local._ts||0)) { mapaLocal[e.id] = e; }
+    // se local mais recente, mantém local
+  });
+  EVASAO_DATA = Object.values(mapaLocal);
+  try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(ex) {}
+}
+
 function _loadEvasaoData() {
   try { var r = localStorage.getItem(_EVASAO_KEY); if (r) EVASAO_DATA = JSON.parse(r); } catch(e) { EVASAO_DATA = []; }
   if (GAS_URL) {
     gasCall('getEvasaoData', { base: ACTIVE_BASE }).then(function(r) {
-      if (r && r.ok && r.data && r.data.length > 0) {
-        // Mescla por id
-        var ids = new Set(EVASAO_DATA.map(function(e){ return e.id; }));
-        r.data.forEach(function(e){ if (!ids.has(e.id)) { EVASAO_DATA.push(e); ids.add(e.id); } else {
-          // Atualiza existente se remoto for mais recente
-          var idx = EVASAO_DATA.findIndex(function(x){ return x.id===e.id; });
-          if (idx>=0 && (e._ts||0) > (EVASAO_DATA[idx]._ts||0)) EVASAO_DATA[idx] = e;
-        }});
-        try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(ex) {}
+      if (r && r.ok && Array.isArray(r.data)) {
+        _mergeEvasao(r.data);
         renderEvasao();
       }
     }).catch(function(){});
@@ -7867,7 +7874,9 @@ function _loadEvasaoData() {
 
 function _saveEvasaoData() {
   try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(e) {}
-  if (GAS_URL) gasCall('saveEvasaoData', { base: ACTIVE_BASE, data: EVASAO_DATA }).catch(function(){});
+  if (!GAS_URL) return;
+  // Envia apenas os registros desta base para o GAS mesclar server-side
+  gasCall('mergeEvasaoData', { base: ACTIVE_BASE, data: EVASAO_DATA }).catch(function(){});
 }
 
 function _importarAlunosevasaoDoDB() {
