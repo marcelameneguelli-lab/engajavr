@@ -1253,8 +1253,8 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         <div style="flex:1;min-width:150px">
           <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Tipo de Prova</label>
           <select id="polo-filtro-tipo" class="search-input" onchange="renderPolo()" style="width:100%">
-            <option value="av">AV Presencial</option>
-            <option value="avs">AVS Presencial</option>
+            <option value="av">AV no Polo</option>
+            <option value="avs">AVS no Polo</option>
           </select>
         </div>
         <div style="flex:1;min-width:150px">
@@ -8936,21 +8936,31 @@ function getFaltaAgendar(r, tipo) {
 // Situação consolidada a partir da base + anotação manual
 // Retorna: 'compareceu' | 'faltou' | 'agendado' | 'nao_agendou'
 function getSituacaoPolo(r, tipo) {
-  var status = getStatusAgend(r, tipo);
+  var status = getStatusAgend(r, tipo);   // STATUS_AGEND_AV / STATUS_AGEND_AVS (lowercase)
+  var falta  = getFaltaAgendar(r, tipo);  // FALTA_AGENDAR_AV / FALTA_AGENDAR_AVS
   var d      = POLO_DATA[r.COD_MATRICULA+':'+tipo]||{};
 
-  // Base indica compareceu/fez
-  if (status==='compareceu'||status==='fez'||status==='100%'||status==='realizado') return 'compareceu';
-  // Base indica faltou/ausente
-  if (status==='faltou'||status==='ausente'||status==='nao_compareceu'||status==='não compareceu') return 'faltou';
-  // Manual: agendou + resultado registrado
+  // Anotações manuais têm prioridade sobre a base
   if (d.agendou && d.faltou)     return 'faltou';
   if (d.agendou && d.compareceu) return 'compareceu';
-  // Base indica agendado ou manual agendou
-  if (status==='agendado'||status==='agendou'||d.agendou) return 'agendado';
-  // Base tem algum status preenchido mas não reconhecido → trata como agendado
+  if (d.agendou)                 return 'agendado';
+
+  // Base indica compareceu/fez (lista de valores conhecidos)
+  if (status==='compareceu'||status==='fez'||status==='100%'||status==='realizado'||
+      status==='presença confirmada'||status==='presente') return 'compareceu';
+  // Base indica faltou/ausente
+  if (status==='faltou'||status==='ausente'||status==='nao compareceu'||
+      status==='não compareceu'||status==='falta') return 'faltou';
+  // Base indica agendado (e FALTA_AGENDAR = false)
+  if ((status==='agendado'||status==='agendou'||status==='confirmado') && !falta) return 'agendado';
+
+  // Se FALTA_AGENDAR = true → ainda não agendou (independente do status)
+  if (falta) return 'nao_agendou';
+
+  // Status preenchido mas falta não confirmada → considera agendado
   if (status && status!=='') return 'agendado';
-  // Sem status → não agendou
+
+  // Sem status e sem falta → não agendou
   return 'nao_agendou';
 }
 
@@ -8993,11 +9003,11 @@ function renderPolo() {
     var sit = getSituacaoPolo(r, tipo);
     if (filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
     if (busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
-    if (filtroSit === 'sem_adesao')    return sit === 'nao_agendou';
+    if (filtroSit === 'sem_adesao')    return sit === 'nao_agendou' || getFaltaAgendar(r, tipo);
     if (filtroSit === 'agendado')      return sit === 'agendado';
     if (filtroSit === 'compareceu')    return sit === 'compareceu';
     if (filtroSit === 'faltou')        return sit === 'faltou';
-    if (filtroSit === 'falta_agendar') return sit === 'nao_agendou';
+    if (filtroSit === 'falta_agendar') return sit === 'nao_agendou' || getFaltaAgendar(r, tipo);
     return true;
   });
 
@@ -9112,7 +9122,7 @@ function dispararLotePolo(){
   var delay=0;
   alunos.forEach(function(r){
     setTimeout(function(){
-      var tpLabel = tipo==='avs' ? 'AVS Presencial' : 'AV Presencial';
+      var tpLabel = tipo==='avs' ? 'AVS no Polo' : 'AV no Polo';
       var msg = tpl.replace(/{nome}/g,cap(r.NOM_ALUNO)).replace(/{curso}/g,cap(r.NOM_CURSO||'')).replace(/{atendente}/g,atend||'Equipe Estácio').replace(/{tipo_prova}/g,tpLabel);
       if(canal==='WhatsApp'){ var tel=(r.NUM_TELEF_CELULAR||r.NUM_TELEFONE||'').replace(/\D/g,''); if(tel) window.open('https://wa.me/55'+tel+'?text='+encodeURIComponent(msg),'_blank'); }
       else { var email=r.END_EMAIL||''; if(email) window.open('mailto:'+email+'?subject=Prova no Polo - '+tpLabel+'&body='+encodeURIComponent(msg),'_blank'); }
@@ -9124,7 +9134,7 @@ function dispararLotePolo(){
 
 function exportarPoloXLSX(){
   var tipo = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
-  var tpLabel = tipo==='avs' ? 'AVS Presencial' : 'AV Presencial';
+  var tpLabel = tipo==='avs' ? 'AVS no Polo' : 'AV no Polo';
   var elegiveis = DB.filter(function(r){ return isEligPolo(r, tipo); });
   var rows=[['Matrícula','Nome','Curso','Modalidade','Tipo Prova','Status Agend (Base)','Falta Agendar','Situação','Agendou (Manual)','Compareceu (Manual)','Faltou (Manual)','Data Prova Agendada','Observação']];
   elegiveis.forEach(function(r){
