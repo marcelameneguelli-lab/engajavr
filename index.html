@@ -3611,9 +3611,11 @@ function renderDashboard() {
 
 // ========== PRODUTIVIDADE ==========
 // Estado dos filtros de produtividade
-let PROD_FILTER_DAYS = 0;      // 0 = todos, 7, 30, 90
-let PROD_FILTER_ATEND = '';    // '' = todos
-let PROD_FILTER_BASE = 'current'; // 'current'=base ativa | 'all'=todas | 'impar'|'par'|'ct'
+// PROD_FILTER_DAYS: -1 = semestre atual (a partir de PROD_CUTOFF_DATE), 0 = todos, 7/30/90 = últimos N dias
+let PROD_FILTER_DAYS = -1;
+let PROD_CUTOFF_DATE = '2026-08-01'; // início do semestre 2026.3 — altere aqui quando mudar o semestre
+let PROD_FILTER_ATEND = '';
+let PROD_FILTER_BASE = 'current';
 
 // Coleta acionamentos de uma base específica com filtros aplicados
 function collectBaseActions(baseKey, cutoffStr) {
@@ -3674,7 +3676,9 @@ function collectBaseActions(baseKey, cutoffStr) {
 function renderProdutividade() {
   // Cutoff de data
   let cutoffStr = '';
-  if (PROD_FILTER_DAYS > 0) {
+  if (PROD_FILTER_DAYS === -1) {
+    cutoffStr = PROD_CUTOFF_DATE; // semestre atual
+  } else if (PROD_FILTER_DAYS > 0) {
     const d = new Date();
     const c = new Date(d.getFullYear(), d.getMonth(), d.getDate() - PROD_FILTER_DAYS + 1);
     cutoffStr = c.toISOString().slice(0,10);
@@ -3730,7 +3734,7 @@ function renderProdutividade() {
 
   // Botões de período (string concatenation — sem template aninhado)
   let periodoBtns = '';
-  [['0','Todo período'],['7','7 dias'],['30','30 dias'],['90','90 dias']].forEach(function(item) {
+  [['-1','📅 Sem. atual'],['0','Todo período'],['30','30 dias'],['90','90 dias']].forEach(function(item) {
     var v = item[0], l = item[1];
     periodoBtns += '<button class="btn btn-sm' + (PROD_FILTER_DAYS==v?' btn-primary':'') + '" onclick="setProdPeriod(' + v + ')">' + l + '</button>';
   });
@@ -3763,7 +3767,7 @@ function renderProdutividade() {
   const btnLimpar = temFiltro ? '<button class="btn btn-sm" onclick="clearProdFilter()">✕ Limpar</button>' : '';
 
   // Label de contexto
-  const periodoLabel = PROD_FILTER_DAYS===0?'Todo o período':('Últimos '+PROD_FILTER_DAYS+' dias');
+  const periodoLabel = PROD_FILTER_DAYS===-1?('Sem. atual (a partir de '+PROD_CUTOFF_DATE+')'):PROD_FILTER_DAYS===0?'Todo o período':('Últimos '+PROD_FILTER_DAYS+' dias');
   const baseLabel = _effBase==='all'?'Todas as bases':(BASE_CONFIG[_effBase]||BASE_CONFIG[ACTIVE_BASE]).label;
 
   // Ranking rows
@@ -3887,7 +3891,7 @@ function setProdBase(base) {
   renderProdutividade();
 }
 function clearProdFilter() {
-  PROD_FILTER_DAYS = 0;
+  PROD_FILTER_DAYS = -1;
   PROD_FILTER_ATEND = '';
   PROD_FILTER_BASE = 'current';
   renderProdutividade();
@@ -7639,9 +7643,34 @@ var _TCE_STORAGE_KEY = 'crm_tce_data';
 
 function _loadTCEData() {
   try { var raw = localStorage.getItem(_TCE_STORAGE_KEY); if (raw) TCE_DATA = JSON.parse(raw); } catch(e) { TCE_DATA = {}; }
+  // Carrega do GAS (fonte central) e mescla
+  if (GAS_URL) {
+    gasCall('getTCEData', { base: ACTIVE_BASE }).then(function(r) {
+      if (r && r.ok && r.data && Object.keys(r.data).length > 0) {
+        // Mescla: dados locais têm prioridade se mais recentes (campo _ts)
+        Object.keys(r.data).forEach(function(mat) {
+          var remoto = r.data[mat];
+          var local  = TCE_DATA[mat];
+          if (!local) { TCE_DATA[mat] = remoto; return; }
+          // Usa timestamp para desempate; sem timestamp, remoto prevalece
+          var tsR = remoto._ts || 0, tsL = local._ts || 0;
+          if (tsR > tsL) TCE_DATA[mat] = remoto;
+        });
+        try { localStorage.setItem(_TCE_STORAGE_KEY, JSON.stringify(TCE_DATA)); } catch(e) {}
+        renderEstagio();
+      }
+    }).catch(function(){});
+  }
 }
+
 function _saveTCEData() {
   try { localStorage.setItem(_TCE_STORAGE_KEY, JSON.stringify(TCE_DATA)); } catch(e) {}
+  // Persiste no GAS (sem aguardar)
+  if (GAS_URL) {
+    gasCall('saveTCEData', { base: ACTIVE_BASE, data: TCE_DATA }).catch(function(e) {
+      console.warn('[_saveTCEData] falha GAS:', e);
+    });
+  }
 }
 
 function _initEstagio() {
@@ -7753,7 +7782,7 @@ function renderEstagio() {
 
 function toggleTCEField(mat,field,val){
   if(!TCE_DATA[mat]) TCE_DATA[mat]={};
-  TCE_DATA[mat][field]=val; _saveTCEData();
+  TCE_DATA[mat][field]=val; TCE_DATA[mat]._ts=Date.now(); _saveTCEData();
   // atualizar contadores
   var elegiveis=DB.filter(function(r){ var v=r.QTD_ELEGIVEL_ESTAGIO||r.ELEGIVEL_ESTAGIO||r.IND_ESTAGIO||0; return v&&v!='0'&&v!==''&&v!=='N'&&v!=='NAO'&&v!=='NÃO'; });
   var ca=0,cd=0,cp=0,ci=0;
@@ -7763,7 +7792,7 @@ function toggleTCEField(mat,field,val){
 
 function salvarOBSTCE(mat,obs){
   if(!TCE_DATA[mat]) TCE_DATA[mat]={};
-  TCE_DATA[mat].obs=obs; _saveTCEData();
+  TCE_DATA[mat].obs=obs; TCE_DATA[mat]._ts=Date.now(); _saveTCEData();
 }
 
 function toggleSelectEst(mat,checked){
