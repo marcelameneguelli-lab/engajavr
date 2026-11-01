@@ -757,20 +757,16 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         <label>Aproveitamento Acadêmico</label>
         <select id="f-aprov" onchange="applyFilters()">
           <option value="">Todos</option>
-          <option value="0%">0% — Sem nota</option>
-          <option value="baixo">Abaixo de 60%</option>
-          <option value="medio">60% a 99%</option>
-          <option value="100%">100% — Completo</option>
+          <option value="0%">0%</option>
+          <option value="parcial">Parcial</option>
+          <option value="100%">100%</option>
         </select>
       </div>
       <div class="filter-group">
         <label>Criticidade SE</label>
         <select id="f-crit-se" onchange="applyFilters()">
           <option value="">Todas</option>
-          <option value="Alto">Alto</option>
-          <option value="Médio">Médio</option>
-          <option value="Baixo">Baixo</option>
-          <option value="sem">Sem criticidade</option>
+          <option value="pendente">Elegíveis sem SE</option>
         </select>
       </div>
       <div class="filter-group">
@@ -2998,17 +2994,16 @@ function applyFilters() {
     // Filtro aproveitamento acadêmico
     if (aprov) {
       const av = (r.APROVEITAMENTO_ACADEMICO_ATUAL || '').trim();
-      const pct = parseInt(av, 10);
-      if (aprov === '0%' && av !== '0%') return false;
-      if (aprov === '100%' && av !== '100%') return false;
-      if (aprov === 'baixo' && (isNaN(pct) || pct === 0 || pct >= 60)) return false;
-      if (aprov === 'medio' && (isNaN(pct) || pct < 60 || pct >= 100)) return false;
+      if (aprov === '0%'    && av !== '0%')   return false;
+      if (aprov === '100%'  && av !== '100%') return false;
+      if (aprov === 'parcial') {
+        const pct = parseInt(av, 10);
+        if (isNaN(pct) || pct <= 0 || pct >= 100) return false;
+      }
     }
-    // Filtro criticidade SE
-    if (critSE) {
-      const cv = (r['CRITICIDADE SE'] || '').trim();
-      if (critSE === 'sem' && cv !== '') return false;
-      if (critSE !== 'sem' && cv !== critSE) return false;
+    // Filtro criticidade SE: "pendente" = elegíveis que não fizeram (NENHUMA ADESÃO)
+    if (critSE === 'pendente') {
+      if ((r['CRITICIDADE SE'] || '').trim() !== 'NENHUMA ADESÃO') return false;
     }
     return true;
   });
