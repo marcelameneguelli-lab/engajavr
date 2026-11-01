@@ -2444,11 +2444,10 @@ function _aplicarRestricoesPerfil() {
   // Aba Importar: só admin e coordenador
   var tabImportar = document.getElementById('tab-importar');
   if (tabImportar) tabImportar.style.display = _podeImportar() ? '' : 'none';
-  // Aba Admin: só admin
-  var tabs = document.querySelectorAll('.tab');
-  tabs.forEach(function(t) {
-    if (t.textContent.includes('Admin') || (t.getAttribute('onclick')||'').includes("'admin'")) {
-      t.style.display = _podeAdmin() ? '' : 'none';
+  // Aba Admin + botão Admin (topbar): só admin
+  document.querySelectorAll('button').forEach(function(b) {
+    if (b.textContent.includes('Admin') || (b.getAttribute('onclick')||'').includes("'admin'")) {
+      b.style.display = _podeAdmin() ? '' : 'none';
     }
   });
   // Chip de perfil na topbar
