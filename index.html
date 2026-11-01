@@ -649,6 +649,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="tab" id="tab-tarefas" onclick="showPage('tarefas')">✅ Tarefas</button>
     <button class="tab" onclick="showPage('tutoriais')">📚 Tutoriais</button>
     <button class="tab" onclick="showPage('financeiro')">💰 Financeiro</button>
+    <button class="tab" onclick="showPage('evasao')" id="tab-evasao">🚪 Evasão</button>
     <button class="tab" onclick="showPage('estagio')">🎓 Estágio</button>
     <button class="tab" id="tab-importar" onclick="showPage('importar')">Importar</button>
     <button class="tab" onclick="showPage('admin')" style="margin-left:auto;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
@@ -1174,6 +1175,207 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
   </div><!-- fim page-estagio -->
 
   <!-- FINANCEIRO -->
+  <!-- ===================== PÁGINA EVASÃO ===================== -->
+  <div class="page" id="page-evasao">
+    <div class="dash-page" style="max-width:100%;padding:20px">
+
+      <!-- Cabeçalho -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:20px;font-weight:800;color:var(--text-primary);margin:0">🚪 Controle de Evasão</h2>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Registro e análise de alunos evadidos ou com intenção de cancelamento</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-sm" onclick="exportarEvasaoXLSX()" style="font-size:12px">📥 Exportar Excel</button>
+          <button class="btn btn-sm btn-primary" onclick="abrirModalEvasao(null)" style="font-size:12px">+ Registrar evasão</button>
+        </div>
+      </div>
+
+      <!-- Cards de resumo -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px" id="evasao-cards">
+        <div style="background:#fff5f5;border:1px solid #ffc9c9;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEvasaoCard('todos')">
+          <div style="font-size:26px;font-weight:800;color:#c92a2a" id="ev-cnt-total">0</div>
+          <div style="font-size:10px;font-weight:700;color:#c92a2a;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Total</div>
+        </div>
+        <div style="background:#fff9db;border:1px solid #ffe066;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEvasaoCard('cancelado')">
+          <div style="font-size:26px;font-weight:800;color:#e67700" id="ev-cnt-cancelado">0</div>
+          <div style="font-size:10px;font-weight:700;color:#e67700;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Cancelados</div>
+        </div>
+        <div style="background:#fff0f6;border:1px solid #faa2c1;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEvasaoCard('trancado')">
+          <div style="font-size:26px;font-weight:800;color:#a61e4d" id="ev-cnt-trancado">0</div>
+          <div style="font-size:10px;font-weight:700;color:#a61e4d;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Trancados</div>
+        </div>
+        <div style="background:#f3f0ff;border:1px solid #b197fc;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEvasaoCard('intencao')">
+          <div style="font-size:26px;font-weight:800;color:#5f3dc4" id="ev-cnt-intencao">0</div>
+          <div style="font-size:10px;font-weight:700;color:#5f3dc4;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Intenção</div>
+        </div>
+        <div style="background:#ebfbee;border:1px solid #8ce99a;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarEvasaoCard('revertido')">
+          <div style="font-size:26px;font-weight:800;color:#2b8a3e" id="ev-cnt-revertido">0</div>
+          <div style="font-size:10px;font-weight:700;color:#2b8a3e;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Revertidos</div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+        <div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">BUSCA</div>
+          <input type="text" id="ev-busca" placeholder="Nome ou matrícula..." style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:180px" oninput="renderEvasao()">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">SITUAÇÃO</div>
+          <select id="ev-sit" onchange="renderEvasao()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+            <option value="">Todas</option>
+            <option value="cancelado">Cancelado</option>
+            <option value="trancado">Trancado</option>
+            <option value="intencao">Intenção de saída</option>
+            <option value="revertido">Revertido</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">OBJEÇÃO</div>
+          <select id="ev-obj" onchange="renderEvasao()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+            <option value="">Todas as objeções</option>
+            <option>Sem objeção registrada</option>
+            <option>Financeiro: não consegue pagar a mensalidade</option>
+            <option>Financeiro: dívida / negociação não aceita</option>
+            <option>Perda de bolsa, FIES ou ProUni</option>
+            <option>Foi para outra instituição (concorrência)</option>
+            <option>Trabalho / falta de tempo</option>
+            <option>Saúde ou questões pessoais / familiares</option>
+            <option>Mudança de cidade</option>
+            <option>Insatisfação com o curso ou a metodologia</option>
+            <option>Insatisfação com atendimento ou infraestrutura</option>
+            <option>Não se identificou com o curso / vai trocar de curso</option>
+            <option>Pausa temporária (pretende voltar)</option>
+            <option>Sem contato / não respondeu</option>
+            <option>Outro</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">ATENDENTE</div>
+          <select id="ev-atend" onchange="renderEvasao()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">PERÍODO</div>
+          <select id="ev-periodo" onchange="renderEvasao()" style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+            <option value="">Todo período</option>
+            <option value="30">Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="sem" selected>Semestre atual</option>
+          </select>
+        </div>
+        <button class="btn btn-sm" onclick="limparFiltrosEvasao()" style="font-size:12px">✕ Limpar</button>
+      </div>
+
+      <!-- Análise por objeção -->
+      <div id="ev-analise" style="margin-bottom:16px"></div>
+
+      <!-- Tabela -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--bg);border-bottom:2px solid var(--border)">
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Aluno</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Curso</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Situação</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Objeção</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Detalhe</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Atendente</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Data</th>
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Dívida</th>
+              <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase"></th>
+            </tr>
+          </thead>
+          <tbody id="ev-tbody">
+            <tr><td colspan="9" style="padding:32px;text-align:center;color:var(--text3)">Nenhum registro de evasão.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="ev-rodape" style="font-size:12px;color:var(--text3);margin-top:8px;text-align:right"></div>
+    </div>
+  </div>
+
+  <!-- Modal registro de evasão -->
+  <div id="modal-evasao" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:12px;padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h3 style="margin:0;font-size:16px;font-weight:800;color:var(--text-primary)" id="ev-modal-titulo">Registrar Evasão</h3>
+        <button onclick="fecharModalEvasao()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
+      </div>
+      <input type="hidden" id="ev-modal-id">
+
+      <!-- Busca aluno -->
+      <div id="ev-modal-busca-wrap" style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">ALUNO (nome ou matrícula)</label>
+        <input type="text" id="ev-modal-busca" placeholder="Digite para buscar..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px" oninput="buscarAlunoEvasao()">
+        <div id="ev-modal-sugestoes" style="border:1px solid var(--border);border-radius:6px;max-height:140px;overflow-y:auto;display:none;background:var(--surface);margin-top:2px"></div>
+        <div id="ev-modal-aluno-sel" style="font-size:12px;color:var(--accent);font-weight:600;margin-top:4px"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">SITUAÇÃO</label>
+          <select id="ev-modal-sit" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+            <option value="cancelado">Cancelado</option>
+            <option value="trancado">Trancado</option>
+            <option value="intencao">Intenção de saída</option>
+            <option value="revertido">Revertido ✅</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">DATA</label>
+          <input type="date" id="ev-modal-data" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">OBJEÇÃO</label>
+        <select id="ev-modal-obj" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+          <option value="">Selecione o motivo...</option>
+          <option>Sem objeção registrada</option>
+          <option>Financeiro: não consegue pagar a mensalidade</option>
+          <option>Financeiro: dívida / negociação não aceita</option>
+          <option>Perda de bolsa, FIES ou ProUni</option>
+          <option>Foi para outra instituição (concorrência)</option>
+          <option>Trabalho / falta de tempo</option>
+          <option>Saúde ou questões pessoais / familiares</option>
+          <option>Mudança de cidade</option>
+          <option>Insatisfação com o curso ou a metodologia</option>
+          <option>Insatisfação com atendimento ou infraestrutura</option>
+          <option>Não se identificou com o curso / vai trocar de curso</option>
+          <option>Pausa temporária (pretende voltar)</option>
+          <option>Sem contato / não respondeu</option>
+          <option>Outro</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">DETALHE / OBSERVAÇÃO</label>
+        <textarea id="ev-modal-obs" rows="3" placeholder="Descreva o que o aluno informou..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical"></textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">ATENDENTE</label>
+          <input type="text" id="ev-modal-atend" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px" placeholder="Nome do atendente">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">DÍVIDA (R$)</label>
+          <input type="text" id="ev-modal-divida" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px" placeholder="0,00">
+        </div>
+      </div>
+
+      <div id="ev-modal-err" style="color:#c92a2a;font-size:12px;margin-bottom:10px;display:none"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn" onclick="fecharModalEvasao()" style="font-size:13px">Cancelar</button>
+        <button id="ev-btn-excluir" class="btn" onclick="excluirEvasao()" style="font-size:13px;color:#c92a2a;border-color:#fcc;display:none">🗑️ Excluir</button>
+        <button class="btn btn-primary" onclick="salvarEvasao()" style="font-size:13px">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="page" id="page-financeiro">
     <div class="dash-page" style="max-width:100%;padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
@@ -5201,6 +5403,7 @@ function showPage(p) {
   }
   if (p === 'importar')   updateImportLabel();
   if (p === 'financeiro') _initFinanceiro();
+  if (p === 'evasao')     _initEvasaoPage();
   if (p === 'estagio')    _initEstagio();
   if (p === 'relatorio')  _initRelatorio();
   if (p === 'admin')      _initAdmin();
@@ -7492,18 +7695,18 @@ function calAcHoje() {
 // ── Modal ────────────────────────────────────────────────────────
 function abrirEvModal(dateStr) {
   CAL_EDIT_ID = null;
-  document.getElementById('ev-modal-titulo').textContent = 'Novo Evento';
+  document.getElementById('cal-modal-titulo').textContent = 'Novo Evento';
   document.getElementById('ev-titulo').value = '';
   document.getElementById('ev-data-ini').value = dateStr || CAL_SEL_DATE || '';
   document.getElementById('ev-data-fim').value = '';
   document.getElementById('ev-desc').value = '';
   document.getElementById('ev-turma').value = '';
   if (document.getElementById('ev-semestre')) document.getElementById('ev-semestre').value = 'todos';
-  document.getElementById('ev-modal-erro').textContent = '';
-  document.getElementById('ev-btn-excluir').style.display = 'none';
+  document.getElementById('cal-modal-erro').textContent = '';
+  document.getElementById('cal-btn-excluir').style.display = 'none';
   EV_TIPO_SEL = 'academico';
   renderTipoGrid();
-  document.getElementById('ev-modal-overlay').style.display = 'flex';
+  document.getElementById('cal-modal-overlay').style.display = 'flex';
   setTimeout(function(){ document.getElementById('ev-titulo').focus(); }, 100);
 }
 
@@ -7511,22 +7714,22 @@ function editarEvento(id) {
   var ev = EVENTOS.find(function(e){ return e.id === id; });
   if (!ev) return;
   CAL_EDIT_ID = id;
-  document.getElementById('ev-modal-titulo').textContent = 'Editar Evento';
+  document.getElementById('cal-modal-titulo').textContent = 'Editar Evento';
   document.getElementById('ev-titulo').value    = ev.titulo;
   document.getElementById('ev-data-ini').value  = ev.dataIni;
   document.getElementById('ev-data-fim').value  = ev.dataFim || '';
   document.getElementById('ev-desc').value      = ev.desc || '';
   document.getElementById('ev-turma').value     = ev.turma || '';
   if (document.getElementById('ev-semestre')) document.getElementById('ev-semestre').value = ev.semestre || 'todos';
-  document.getElementById('ev-modal-erro').textContent = '';
-  document.getElementById('ev-btn-excluir').style.display = '';
+  document.getElementById('cal-modal-erro').textContent = '';
+  document.getElementById('cal-btn-excluir').style.display = '';
   EV_TIPO_SEL = ev.tipo || 'academico';
   renderTipoGrid();
-  document.getElementById('ev-modal-overlay').style.display = 'flex';
+  document.getElementById('cal-modal-overlay').style.display = 'flex';
 }
 
 function fecharEvModal() {
-  document.getElementById('ev-modal-overlay').style.display = 'none';
+  document.getElementById('cal-modal-overlay').style.display = 'none';
 }
 
 function renderTipoGrid() {
@@ -7552,7 +7755,7 @@ function salvarEvento() {
   var dataFim = document.getElementById('ev-data-fim').value;
   var desc    = document.getElementById('ev-desc').value.trim();
   var turma   = document.getElementById('ev-turma').value.trim();
-  var erroEl  = document.getElementById('ev-modal-erro');
+  var erroEl  = document.getElementById('cal-modal-erro');
 
   if (!titulo)  { erroEl.textContent = 'Informe o título do evento.'; return; }
   if (!dataIni) { erroEl.textContent = 'Informe a data de início.'; return; }
@@ -7635,6 +7838,297 @@ function fecharModalFinanceiro() {
   // Sem overlay — mantido por compatibilidade
 }
 
+
+// ========== EVASÃO ==========
+var EVASAO_DATA = [];         // [{id, mat, nome, curso, sit, obj, obs, atend, data, divida, base}]
+var _EVASAO_KEY = 'crm_evasao_data';
+var _evasaoFiltroCard = '';   // '' | 'cancelado' | 'trancado' | 'intencao' | 'revertido'
+var _evasaoModalMat = null;
+
+function _loadEvasaoData() {
+  try { var r = localStorage.getItem(_EVASAO_KEY); if (r) EVASAO_DATA = JSON.parse(r); } catch(e) { EVASAO_DATA = []; }
+  if (GAS_URL) {
+    gasCall('getEvasaoData', { base: ACTIVE_BASE }).then(function(r) {
+      if (r && r.ok && r.data && r.data.length > 0) {
+        // Mescla por id
+        var ids = new Set(EVASAO_DATA.map(function(e){ return e.id; }));
+        r.data.forEach(function(e){ if (!ids.has(e.id)) { EVASAO_DATA.push(e); ids.add(e.id); } else {
+          // Atualiza existente se remoto for mais recente
+          var idx = EVASAO_DATA.findIndex(function(x){ return x.id===e.id; });
+          if (idx>=0 && (e._ts||0) > (EVASAO_DATA[idx]._ts||0)) EVASAO_DATA[idx] = e;
+        }});
+        try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(ex) {}
+        renderEvasao();
+      }
+    }).catch(function(){});
+  }
+}
+
+function _saveEvasaoData() {
+  try { localStorage.setItem(_EVASAO_KEY, JSON.stringify(EVASAO_DATA)); } catch(e) {}
+  if (GAS_URL) gasCall('saveEvasaoData', { base: ACTIVE_BASE, data: EVASAO_DATA }).catch(function(){});
+}
+
+function _initEvasaoPage() {
+  _loadEvasaoData();
+  // Popula select de atendentes
+  var sel = document.getElementById('ev-atend');
+  if (sel) {
+    var atds = ATENDENTES.length ? ATENDENTES : [];
+    sel.innerHTML = '<option value="">Todos</option>' + atds.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
+  }
+  renderEvasao();
+}
+
+function filtrarEvasaoCard(tipo) {
+  _evasaoFiltroCard = _evasaoFiltroCard === tipo ? '' : tipo;
+  var sitSel = document.getElementById('ev-sit');
+  if (sitSel) sitSel.value = _evasaoFiltroCard;
+  renderEvasao();
+}
+
+function limparFiltrosEvasao() {
+  _evasaoFiltroCard = '';
+  ['ev-busca','ev-sit','ev-obj','ev-atend'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var p = document.getElementById('ev-periodo'); if(p) p.value='sem';
+  renderEvasao();
+}
+
+function renderEvasao() {
+  var busca   = (document.getElementById('ev-busca')   ||{}).value||'';
+  var sit     = (document.getElementById('ev-sit')     ||{}).value||'';
+  var obj     = (document.getElementById('ev-obj')     ||{}).value||'';
+  var atend   = (document.getElementById('ev-atend')   ||{}).value||'';
+  var periodo = (document.getElementById('ev-periodo') ||{}).value||'';
+  busca = busca.toLowerCase().trim();
+
+  // Cutoff de data
+  var cutoff = '';
+  if (periodo === 'sem') cutoff = PROD_CUTOFF_DATE;
+  else if (periodo === '30') { var d30=new Date(); d30.setDate(d30.getDate()-30); cutoff=d30.toISOString().slice(0,10); }
+  else if (periodo === '90') { var d90=new Date(); d90.setDate(d90.getDate()-90); cutoff=d90.toISOString().slice(0,10); }
+
+  var registros = EVASAO_DATA.filter(function(e) {
+    if (e.base && e.base !== ACTIVE_BASE) return false; // filtra por base ativa
+    if (busca && !(e.nome||'').toLowerCase().includes(busca) && !(e.mat||'').includes(busca)) return false;
+    if (sit  && e.sit  !== sit)  return false;
+    if (obj  && e.obj  !== obj)  return false;
+    if (atend && e.atend !== atend) return false;
+    if (cutoff && e.data < cutoff) return false;
+    return true;
+  });
+
+  // Contadores dos cards (sem filtro de sit/obj/atend/periodo para mostrar totais reais)
+  var base = EVASAO_DATA.filter(function(e){ return !e.base || e.base===ACTIVE_BASE; });
+  setText('ev-cnt-total',     base.length);
+  setText('ev-cnt-cancelado', base.filter(function(e){return e.sit==='cancelado';}).length);
+  setText('ev-cnt-trancado',  base.filter(function(e){return e.sit==='trancado';}).length);
+  setText('ev-cnt-intencao',  base.filter(function(e){return e.sit==='intencao';}).length);
+  setText('ev-cnt-revertido', base.filter(function(e){return e.sit==='revertido';}).length);
+
+  // Análise por objeção
+  var objMap = {};
+  registros.forEach(function(e){ var o=e.obj||'Sem objeção registrada'; objMap[o]=(objMap[o]||0)+1; });
+  var objRows = Object.keys(objMap).sort(function(a,b){ return objMap[b]-objMap[a]; });
+  var analiseHtml = objRows.length ? (
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">' +
+    '<div style="font-size:12px;font-weight:800;color:var(--text-primary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Objeção × Situação</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--bg)">' +
+    '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--text3)">Objeção</th>' +
+    '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text3)">Cancelados</th>' +
+    '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text3)">Trancados</th>' +
+    '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text3)">Intenção</th>' +
+    '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:var(--text3)">Revertidos</th>' +
+    '<th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#c92a2a">Total</th>' +
+    '</tr></thead><tbody>' +
+    objRows.map(function(o) {
+      var rs = registros.filter(function(e){ return (e.obj||'Sem objeção registrada')===o; });
+      var can=rs.filter(function(e){return e.sit==='cancelado';}).length;
+      var tra=rs.filter(function(e){return e.sit==='trancado';}).length;
+      var int=rs.filter(function(e){return e.sit==='intencao';}).length;
+      var rev=rs.filter(function(e){return e.sit==='revertido';}).length;
+      return '<tr style="border-top:1px solid var(--border)">' +
+        '<td style="padding:8px 12px;font-weight:500">' + o + '</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#e67700">' + (can||'—') + '</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#a61e4d">' + (tra||'—') + '</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#5f3dc4">' + (int||'—') + '</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:#2b8a3e">' + (rev||'—') + '</td>' +
+        '<td style="padding:8px 12px;text-align:center;font-weight:700;color:#c92a2a">' + rs.length + '</td>' +
+        '</tr>';
+    }).join('') + '</tbody></table></div>'
+  ) : '';
+  var analiseEl = document.getElementById('ev-analise');
+  if (analiseEl) analiseEl.innerHTML = analiseHtml;
+
+  // Tabela
+  var SIT_LABELS = { cancelado:'<span style="color:#e67700;font-weight:700">Cancelado</span>', trancado:'<span style="color:#a61e4d;font-weight:700">Trancado</span>', intencao:'<span style="color:#5f3dc4;font-weight:700">Intenção</span>', revertido:'<span style="color:#2b8a3e;font-weight:700">✅ Revertido</span>' };
+  registros.sort(function(a,b){ return (b.data||'').localeCompare(a.data||''); });
+  var tbody = document.getElementById('ev-tbody');
+  if (!tbody) return;
+  if (!registros.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--text3)">Nenhum registro encontrado.</td></tr>';
+    setText('ev-rodape','');
+    return;
+  }
+  var aluno = function(e) {
+    var r = DB.find(function(x){ return x.COD_MATRICULA===e.mat; });
+    var div = e.divida ? 'R$ '+e.divida : '—';
+    return '<tr style="border-top:1px solid var(--border)">' +
+      '<td style="padding:9px 14px"><div style="font-weight:600;color:var(--text-primary)">'+(e.nome||'—')+'</div><div style="font-size:11px;color:var(--text3)">'+(e.mat||'')+(r?' · '+(r.NOM_CURSO||''):'')+'</div></td>' +
+      '<td style="padding:9px 14px;font-size:12px">'+(r?r.NOM_CURSO||'—':'—')+'</td>' +
+      '<td style="padding:9px 14px">'+(SIT_LABELS[e.sit]||e.sit||'—')+'</td>' +
+      '<td style="padding:9px 14px;font-size:12px">'+(e.obj||'—')+'</td>' +
+      '<td style="padding:9px 14px;font-size:12px;color:var(--text3);max-width:200px">'+(e.obs||'—')+'</td>' +
+      '<td style="padding:9px 14px;font-size:12px">'+(e.atend||'—')+'</td>' +
+      '<td style="padding:9px 14px;font-size:12px;white-space:nowrap">'+(e.data?e.data.split('-').reverse().join('/'):'—')+'</td>' +
+      '<td style="padding:9px 14px;font-size:12px;color:#c92a2a;font-weight:600">'+(e.divida?'R$ '+e.divida:'—')+'</td>' +
+      '<td style="padding:9px 14px;text-align:center"><button class="btn btn-sm" onclick="abrirModalEvasao(\''+e.id+'\')" style="font-size:11px;padding:3px 8px">Ver</button></td>' +
+      '</tr>';
+  };
+  tbody.innerHTML = registros.map(aluno).join('');
+  setText('ev-rodape', registros.length + ' registro(s)');
+}
+
+function abrirModalEvasao(id) {
+  var modal = document.getElementById('modal-evasao');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.getElementById('ev-modal-err').style.display = 'none';
+  var excluirBtn = document.getElementById('ev-btn-excluir');
+
+  if (!id) {
+    // Novo registro
+    document.getElementById('ev-modal-titulo').textContent = 'Registrar Evasão';
+    document.getElementById('ev-modal-id').value = '';
+    document.getElementById('ev-modal-busca').value = '';
+    document.getElementById('ev-modal-aluno-sel').textContent = '';
+    document.getElementById('ev-modal-sugestoes').style.display = 'none';
+    document.getElementById('ev-modal-busca-wrap').style.display = 'block';
+    document.getElementById('ev-modal-sit').value = 'cancelado';
+    document.getElementById('ev-modal-obj').value = '';
+    document.getElementById('ev-modal-obs').value = '';
+    document.getElementById('ev-modal-data').value = new Date().toISOString().slice(0,10);
+    document.getElementById('ev-modal-atend').value = (_usuarioLogado&&_usuarioLogado.nome)||'';
+    document.getElementById('ev-modal-divida').value = '';
+    if (excluirBtn) excluirBtn.style.display = 'none';
+    _evasaoModalMat = null;
+  } else {
+    // Editar existente
+    var reg = EVASAO_DATA.find(function(e){ return e.id===id; });
+    if (!reg) return;
+    document.getElementById('ev-modal-titulo').textContent = 'Editar Evasão';
+    document.getElementById('ev-modal-id').value = id;
+    document.getElementById('ev-modal-busca-wrap').style.display = 'none';
+    document.getElementById('ev-modal-aluno-sel').textContent = (reg.nome||'') + ' · ' + (reg.mat||'');
+    document.getElementById('ev-modal-sit').value = reg.sit||'cancelado';
+    document.getElementById('ev-modal-obj').value = reg.obj||'';
+    document.getElementById('ev-modal-obs').value = reg.obs||'';
+    document.getElementById('ev-modal-data').value = reg.data||'';
+    document.getElementById('ev-modal-atend').value = reg.atend||'';
+    document.getElementById('ev-modal-divida').value = reg.divida||'';
+    if (excluirBtn) excluirBtn.style.display = 'inline-block';
+    _evasaoModalMat = reg.mat;
+  }
+}
+
+function fecharModalEvasao() {
+  var modal = document.getElementById('modal-evasao');
+  if (modal) modal.style.display = 'none';
+}
+
+function buscarAlunoEvasao() {
+  var q = (document.getElementById('ev-modal-busca')||{}).value||'';
+  var sug = document.getElementById('ev-modal-sugestoes');
+  if (!sug) return;
+  q = q.toLowerCase().trim();
+  if (q.length < 2) { sug.style.display='none'; return; }
+  var res = DB.filter(function(r){ return (r.NOM_ALUNO||'').toLowerCase().includes(q)||(r.COD_MATRICULA||'').includes(q); }).slice(0,8);
+  if (!res.length) { sug.style.display='none'; return; }
+  sug.style.display='block';
+  sug.innerHTML = res.map(function(r){
+    return '<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)" onmousedown="selecionarAlunoEvasao(\''+r.COD_MATRICULA+'\')">' +
+      '<b>'+(r.NOM_ALUNO||'')+'</b> <span style="color:var(--text3);font-size:11px">'+r.COD_MATRICULA+' · '+(r.NOM_CURSO||'')+'</span></div>';
+  }).join('');
+}
+
+function selecionarAlunoEvasao(mat) {
+  var r = DB.find(function(x){ return x.COD_MATRICULA===mat; });
+  if (!r) return;
+  _evasaoModalMat = mat;
+  var busca = document.getElementById('ev-modal-busca'); if(busca) busca.value='';
+  var sug = document.getElementById('ev-modal-sugestoes'); if(sug) sug.style.display='none';
+  var sel = document.getElementById('ev-modal-aluno-sel');
+  if (sel) sel.textContent = (r.NOM_ALUNO||mat) + ' · ' + mat + ' · ' + (r.NOM_CURSO||'');
+  // Preenche dívida automática se disponível
+  var divEl = document.getElementById('ev-modal-divida');
+  if (divEl && !divEl.value) {
+    var div = parseFloat(String(r.DIVIDA||r.VLR_DIVIDA||r.VALOR_DIVIDA||'0').replace(',','.'));
+    if (div>0) divEl.value = div.toFixed(2).replace('.',',');
+  }
+}
+
+function salvarEvasao() {
+  var id    = document.getElementById('ev-modal-id').value;
+  var sit   = document.getElementById('ev-modal-sit').value;
+  var obj   = document.getElementById('ev-modal-obj').value;
+  var obs   = document.getElementById('ev-modal-obs').value.trim();
+  var data  = document.getElementById('ev-modal-data').value;
+  var atend = document.getElementById('ev-modal-atend').value.trim();
+  var divida= document.getElementById('ev-modal-divida').value.trim();
+  var errEl = document.getElementById('ev-modal-err');
+
+  if (!_evasaoModalMat && !id) {
+    errEl.textContent='⚠️ Selecione um aluno.'; errEl.style.display='block'; return;
+  }
+  if (!sit) { errEl.textContent='⚠️ Selecione a situação.'; errEl.style.display='block'; return; }
+  if (!obj) { errEl.textContent='⚠️ Selecione a objeção.'; errEl.style.display='block'; return; }
+
+  if (id) {
+    // Edição
+    var idx = EVASAO_DATA.findIndex(function(e){ return e.id===id; });
+    if (idx>=0) {
+      EVASAO_DATA[idx] = Object.assign(EVASAO_DATA[idx], { sit, obj, obs, data, atend, divida, _ts: Date.now() });
+    }
+  } else {
+    // Novo
+    var r = DB.find(function(x){ return x.COD_MATRICULA===_evasaoModalMat; });
+    EVASAO_DATA.push({
+      id: 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      mat: _evasaoModalMat,
+      nome: r ? r.NOM_ALUNO||'' : '',
+      curso: r ? r.NOM_CURSO||'' : '',
+      base: ACTIVE_BASE,
+      sit, obj, obs, data, atend, divida,
+      _ts: Date.now()
+    });
+  }
+  _saveEvasaoData();
+  fecharModalEvasao();
+  renderEvasao();
+  showToast('✅ Registro de evasão salvo.');
+}
+
+function excluirEvasao() {
+  var id = document.getElementById('ev-modal-id').value;
+  if (!id) return;
+  if (!confirm('Excluir este registro de evasão?')) return;
+  EVASAO_DATA = EVASAO_DATA.filter(function(e){ return e.id!==id; });
+  _saveEvasaoData();
+  fecharModalEvasao();
+  renderEvasao();
+  showToast('🗑️ Registro excluído.');
+}
+
+function exportarEvasaoXLSX() {
+  var rows = [['Matrícula','Nome','Curso','Situação','Objeção','Detalhe','Atendente','Data','Dívida','Base']];
+  var SIT = {cancelado:'Cancelado',trancado:'Trancado',intencao:'Intenção de saída',revertido:'Revertido'};
+  EVASAO_DATA.forEach(function(e) {
+    rows.push([e.mat||'',e.nome||'',e.curso||'',SIT[e.sit]||e.sit||'',e.obj||'',e.obs||'',e.atend||'',e.data?e.data.split('-').reverse().join('/'):'',(e.divida?'R$ '+e.divida:''),e.base||'']);
+  });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Evasão');
+  XLSX.writeFile(wb, 'evasao_' + ACTIVE_BASE + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
 
 // ========== ESTÁGIO / TCE ==========
 var TCE_DATA = {};
@@ -8352,10 +8846,10 @@ function exportarRelatorioXLSX() {
     </div>
   </div>
 
-<div class="ev-modal-overlay" id="ev-modal-overlay" style="display:none" onclick="if(event.target===this)fecharEvModal()">
+<div class="ev-modal-overlay" id="cal-modal-overlay" style="display:none" onclick="if(event.target===this)fecharEvModal()">
     <div class="ev-modal-box">
       <div class="ev-modal-header">
-        <h3 id="ev-modal-titulo">Novo Evento</h3>
+        <h3 id="cal-modal-titulo">Novo Evento</h3>
         <button class="btn btn-sm" onclick="fecharEvModal()">✕</button>
       </div>
       <div class="ev-modal-body">
@@ -8394,10 +8888,10 @@ function exportarRelatorioXLSX() {
           <label>Turma / Público-alvo (opcional)</label>
           <input type="text" id="ev-turma" placeholder="Ex: EAD, Presencial, 1° período...">
         </div>
-        <div id="ev-modal-erro" style="color:var(--red);font-size:12px;margin-top:4px"></div>
+        <div id="cal-modal-erro" style="color:var(--red);font-size:12px;margin-top:4px"></div>
       </div>
       <div class="ev-modal-footer">
-        <button class="btn btn-sm" id="ev-btn-excluir" onclick="excluirEvento()" style="display:none;margin-right:auto;color:var(--red);border-color:var(--red)">🗑️ Excluir</button>
+        <button class="btn btn-sm" id="cal-btn-excluir" onclick="excluirEvento()" style="display:none;margin-right:auto;color:var(--red);border-color:var(--red)">🗑️ Excluir</button>
         <button class="btn" onclick="fecharEvModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="salvarEvento()">💾 Salvar</button>
       </div>
