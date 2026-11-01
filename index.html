@@ -1234,15 +1234,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
           <div style="font-size:26px;font-weight:800;color:#0b7285" id="polo-cnt-agendado">0</div>
           <div style="font-size:10px;font-weight:700;color:#0b7285;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Agendados</div>
         </div>
-        <div style="background:#ebfbee;border:1px solid #b2f2bb;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('compareceu')">
-          <div style="font-size:26px;font-weight:800;color:#276b35" id="polo-cnt-compareceu">0</div>
-          <div style="font-size:10px;font-weight:700;color:#276b35;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Compareceram</div>
-        </div>
-        <div style="background:#fff0f6;border:1px solid #faa2c1;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('faltou')">
-          <div style="font-size:26px;font-weight:800;color:#a61e4d" id="polo-cnt-faltou">0</div>
-          <div style="font-size:10px;font-weight:700;color:#a61e4d;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Faltaram</div>
-        </div>
-        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:14px;text-align:center">
+        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="filtrarPoloPage('falta_agendar')">
           <div style="font-size:26px;font-weight:800;color:#495057" id="polo-cnt-falta-agendar">0</div>
           <div style="font-size:10px;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Falta Agendar</div>
         </div>
@@ -1263,9 +1255,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <option value="todos">Todos elegíveis</option>
             <option value="sem_adesao">Não agendaram</option>
             <option value="agendado">Agendados</option>
-            <option value="compareceu">Compareceram</option>
-            <option value="faltou">Faltaram (agendou e não compareceu)</option>
-            <option value="falta_agendar">Falta agendar (elegível mas sem agendamento)</option>
+            <option value="falta_agendar">Falta agendar</option>
           </select>
         </div>
         <div style="flex:1;min-width:150px">
@@ -1291,17 +1281,14 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
               <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Matrícula</th>
               <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Curso</th>
               <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Modalidade</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Adesão Base</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#0b7285">Agendou?</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#276b35">Compareceu?</th>
-              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#a61e4d">Faltou?</th>
-              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Data agendamento</th>
+              <th style="padding:10px 12px;text-align:center;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Situação</th>
+              <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Próxima Prova</th>
               <th style="padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Observação</th>
               <th style="padding:10px 12px;border-bottom:2px solid var(--border)"></th>
             </tr>
           </thead>
           <tbody id="polo-tabela-body">
-            <tr><td colspan="12" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>
+            <tr><td colspan="8" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>
           </tbody>
         </table>
       </div>
@@ -8973,7 +8960,7 @@ function filtrarPoloPage(tipo) {
 function renderPolo() {
   if (!DB || !DB.length) {
     var tb = document.getElementById('polo-tabela-body');
-    if (tb) tb.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="8" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
     return;
   }
   var tipo       = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
@@ -9015,17 +9002,17 @@ function renderPolo() {
   _POLO_SELECTED.clear(); setText('polo-sel-count',0);
   var allChk=document.getElementById('polo-check-all'); if(allChk) allChk.checked=false;
   var tb=document.getElementById('polo-tabela-body'); if(!tb) return;
-  if(!lista.length){ tb.innerHTML='<tr><td colspan="12" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado.</td></tr>'; return; }
+  if(!lista.length){ tb.innerHTML='<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado.</td></tr>'; return; }
 
   tb.innerHTML=lista.map(function(r){
-    var key      = r.COD_MATRICULA+':'+tipo;
-    var d        = POLO_DATA[key]||{};
-    var status   = getStatusAgend(r, tipo);   // STATUS_AGEND_AV / STATUS_AGEND_AVS
-    var falta    = getFaltaAgendar(r, tipo);  // FALTA_AGENDAR_AV / FALTA_AGENDAR_AVS
-    var sit      = getSituacaoPolo(r, tipo);
-    var qtdCasa  = parseFloat(tipo==='avs' ? r['QTD_ELEGIVEL_AVS_CASA'] : r['QTD_ELEGIVEL_AV_CASA'])||0;
+    var key    = r.COD_MATRICULA+':'+tipo;
+    var d      = POLO_DATA[key]||{};
+    var status = getStatusAgend(r, tipo);
+    var falta  = getFaltaAgendar(r, tipo);
+    var sit    = getSituacaoPolo(r, tipo);
+    var qtdCasa= parseFloat(tipo==='avs' ? r['QTD_ELEGIVEL_AVS_CASA'] : r['QTD_ELEGIVEL_AV_CASA'])||0;
 
-    // Badge de situação consolidada
+    // Badge de situação
     var sitLabel =
       sit==='compareceu' ? '<span class="badge badge-green">✔ Compareceu</span>' :
       sit==='faltou'     ? '<span class="badge badge-red">✘ Faltou</span>' :
@@ -9033,23 +9020,13 @@ function renderPolo() {
       falta              ? '<span class="badge badge-yellow">⚠ Falta agendar</span>' :
                            '<span class="badge badge-gray">— Não agendou</span>';
 
-    // Badge "em casa" se elegível também em casa
-    var casaBadge = qtdCasa>0 ? ' <span class="badge badge-gray" style="font-size:10px" title="Elegível em casa: '+qtdCasa+'">🏠 '+qtdCasa+'</span>' : '';
+    var statusExtra = status ? '<br><span style="font-size:10px;color:var(--text3)">'+status+'</span>' : '';
+    var casaBadge   = qtdCasa>0 ? ' <span class="badge badge-gray" style="font-size:10px" title="Elegível em casa: '+qtdCasa+'">🏠 '+qtdCasa+'</span>' : '';
 
-    // Status bruto da base para referência
-    var statusBase = status ? '<span style="font-size:10px;color:var(--text3)">'+status+'</span>' : '';
-
-    // Data: prioridade para campo manual, depois DT_PROXIMA_PROVA_AGENDADA da base
-    var dtBase = (r['DT_PROXIMA_PROVA_AGENDADA']||'').toString().split('T')[0];
-    var dataVal = (d.data_agendamento || dtBase || '').replace(/"/g,'&quot;');
-    var obsVal  = (d.obs||'').replace(/"/g,'&quot;');
-
-    // Checkboxes: bloqueia edição quando a base já tem resultado definitivo
-    var baseDefinida = sit==='compareceu' && !d.agendou;  // base diz compareceu, não manual
-    var dis      = baseDefinida ? ' disabled' : '';
-    var chkAg    = (sit==='agendado'||sit==='compareceu'||sit==='faltou'||d.agendou) ? ' checked' : '';
-    var chkComp  = (sit==='compareceu'||d.compareceu) ? ' checked' : '';
-    var chkFalt  = (sit==='faltou'||d.faltou)         ? ' checked' : '';
+    // Data da prova vinda diretamente da base
+    var dtBase       = (r['DT_PROXIMA_PROVA_AGENDADA']||'').toString().split('T')[0];
+    var dtFormatada  = dtBase ? dtBase.split('-').reverse().join('/') : '<span style="color:var(--text3)">—</span>';
+    var obsVal       = (d.obs||'').replace(/"/g,'&quot;');
 
     return '<tr>'+
       '<td style="padding:8px 12px"><input type="checkbox" class="polo-row-chk" data-mat="'+r.COD_MATRICULA+'" onchange="toggleSelectPolo(\''+r.COD_MATRICULA+'\',this.checked)"></td>'+
@@ -9057,12 +9034,9 @@ function renderPolo() {
       '<td style="padding:8px 12px;color:var(--text3)">'+r.COD_MATRICULA+'</td>'+
       '<td style="padding:8px 12px;font-size:12px">'+cap(r.NOM_CURSO||'')+'</td>'+
       '<td style="padding:8px 12px"><span class="badge badge-gray" style="font-size:10px">'+(r.MODALIDADE_PP_PC||'')+'</span></td>'+
-      '<td style="padding:8px 12px">'+sitLabel+casaBadge+'<br>'+statusBase+'</td>'+
-      '<td style="padding:8px 12px;text-align:center"><input type="checkbox"'+chkAg+dis+' title="Agendou?" onchange="togglePoloField(\''+key+'\',\'agendou\',this.checked)"></td>'+
-      '<td style="padding:8px 12px;text-align:center"><input type="checkbox"'+chkComp+dis+' title="Compareceu?" onchange="togglePoloField(\''+key+'\',\'compareceu\',this.checked)"></td>'+
-      '<td style="padding:8px 12px;text-align:center"><input type="checkbox"'+chkFalt+dis+' title="Agendou e faltou?" onchange="togglePoloField(\''+key+'\',\'faltou\',this.checked)"></td>'+
-      '<td style="padding:8px 12px"><input type="date" value="'+dataVal+'" style="height:28px;padding:0 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarDataPolo(\''+key+'\',this.value)" title="Data da base: '+dtBase+'"></td>'+
-      '<td style="padding:8px 12px"><input type="text" value="'+obsVal+'" placeholder="Observação..." style="width:130px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarObsPolo(\''+key+'\',this.value)"></td>'+
+      '<td style="padding:8px 12px">'+sitLabel+casaBadge+statusExtra+'</td>'+
+      '<td style="padding:8px 12px;font-weight:600;font-size:13px">'+dtFormatada+'</td>'+
+      '<td style="padding:8px 12px"><input type="text" value="'+obsVal+'" placeholder="Observação..." style="width:150px;height:28px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface)" onchange="salvarObsPolo(\''+key+'\',this.value)"></td>'+
       '<td style="padding:8px 12px"><button class="btn btn-sm" onclick="openModal(\''+r.COD_MATRICULA+'\')">👤</button></td>'+
       '</tr>';
   }).join('');
