@@ -7890,9 +7890,9 @@ function _importarAlunosevasaoDoDB() {
     var sitNorm = '';
     if (SIT_CANCELADO.some(function(s){ return sit.includes(s); })) sitNorm = 'cancelado';
     else if (SIT_TRANCADO.some(function(s){ return sit.includes(s); })) sitNorm = 'trancado';
-    else if (prop.includes('ALTO') || prop.includes('1 -') || indicio === 'SIM' || indicio === 'S') sitNorm = 'intencao';
+    // Intenção de saída NÃO é inferida da base — só pode ser registrada manualmente pelo atendente
 
-    if (!sitNorm) return; // aluno ativo sem risco, ignora
+    if (!sitNorm) return; // aluno ativo, não importa automaticamente
 
     var div = parseFloat(String(r.DIVIDA || r.VLR_DIVIDA || r.VALOR_DIVIDA || '0').replace(',','.'));
     novos.push({
@@ -7930,7 +7930,12 @@ function _initEvasaoPage() {
     sel.innerHTML = '<option value="">Todos</option>' + atds.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
   }
 
-  // Importa da base automaticamente alunos evadidos/em risco ainda não registrados
+  // Remove registros de "intenção" gerados automaticamente (não são confiáveis)
+  var antesLimpeza = EVASAO_DATA.length;
+  EVASAO_DATA = EVASAO_DATA.filter(function(e){ return !(e._importado && e.sit === 'intencao'); });
+  if (EVASAO_DATA.length < antesLimpeza) _saveEvasaoData();
+
+  // Importa da base automaticamente apenas cancelados e trancados
   var qtd = _importarAlunosevasaoDoDB();
   if (qtd > 0) showToast('📥 ' + qtd + ' aluno(s) importado(s) automaticamente da base.');
 
