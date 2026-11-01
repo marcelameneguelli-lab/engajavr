@@ -754,6 +754,26 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </select>
       </div>
       <div class="filter-group">
+        <label>Aproveitamento Acadêmico</label>
+        <select id="f-aprov" onchange="applyFilters()">
+          <option value="">Todos</option>
+          <option value="0%">0% — Sem nota</option>
+          <option value="baixo">Abaixo de 60%</option>
+          <option value="medio">60% a 99%</option>
+          <option value="100%">100% — Completo</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Criticidade SE</label>
+        <select id="f-crit-se" onchange="applyFilters()">
+          <option value="">Todas</option>
+          <option value="Alto">Alto</option>
+          <option value="Médio">Médio</option>
+          <option value="Baixo">Baixo</option>
+          <option value="sem">Sem criticidade</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label>Curso</label>
         <select id="f-curso" onchange="applyFilters()">
           <option value="">Todos</option>
@@ -2941,6 +2961,8 @@ function applyFilters() {
   const acion = document.getElementById('f-acion').value;
   const formando = document.getElementById('f-formando') ? document.getElementById('f-formando').value : '';
   const trancamento = document.getElementById('f-trancamento') ? document.getElementById('f-trancamento').value : '';
+  const aprov = document.getElementById('f-aprov') ? document.getElementById('f-aprov').value : '';
+  const critSE = document.getElementById('f-crit-se') ? document.getElementById('f-crit-se').value : '';
 
   FILTERED = DB.filter(r => {
     if (ACTIVE_PRIO && getPrio(r) !== ACTIVE_PRIO) return false;
@@ -2973,6 +2995,21 @@ function applyFilters() {
       if (trancamento === 'sim' && !flagTranc) return false;
       if (trancamento === 'nao' && flagTranc) return false;
     }
+    // Filtro aproveitamento acadêmico
+    if (aprov) {
+      const av = (r.APROVEITAMENTO_ACADEMICO_ATUAL || '').trim();
+      const pct = parseInt(av, 10);
+      if (aprov === '0%' && av !== '0%') return false;
+      if (aprov === '100%' && av !== '100%') return false;
+      if (aprov === 'baixo' && (isNaN(pct) || pct === 0 || pct >= 60)) return false;
+      if (aprov === 'medio' && (isNaN(pct) || pct < 60 || pct >= 100)) return false;
+    }
+    // Filtro criticidade SE
+    if (critSE) {
+      const cv = (r['CRITICIDADE SE'] || '').trim();
+      if (critSE === 'sem' && cv !== '') return false;
+      if (critSE !== 'sem' && cv !== critSE) return false;
+    }
     return true;
   });
 
@@ -2983,7 +3020,7 @@ function applyFilters() {
 
 function clearFilters() {
   setPrio('');
-  ['f-search','f-periodo','f-tipo-curso','f-safra','f-mod','f-fin','f-prop','f-curso','f-sit','f-acion','f-formando','f-trancamento'].forEach(id => {
+  ['f-search','f-periodo','f-tipo-curso','f-safra','f-mod','f-fin','f-prop','f-aprov','f-crit-se','f-curso','f-sit','f-acion','f-formando','f-trancamento'].forEach(id => {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.value = ''; else el.value = '';
   });
