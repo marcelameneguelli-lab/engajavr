@@ -660,7 +660,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <button class="tab" onclick="showPage('financeiro')">💰 Financeiro</button>
     <button class="tab" onclick="showPage('evasao')" id="tab-evasao">🚪 Evasão</button>
     <button class="tab" onclick="showPage('estagio')">🎓 Estágio</button>
-    <button class="tab" onclick="showPage('polo')">🏫 Polo</button>
+    <button class="tab" onclick="showPage('polo')">📝 Provas</button>
     <button class="tab" id="tab-importar" onclick="showPage('importar')">Importar</button>
     <button class="tab" onclick="showPage('admin')" style="margin-left:auto;border-color:#ffc9c9;color:#c92a2a;background:#fff5f5">🔐 Admin</button>
   </div>
@@ -1212,7 +1212,7 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
     <div class="dash-page" style="max-width:100%;padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
         <div>
-          <h2 style="font-size:20px;font-weight:700;margin:0">🏫 Provas no Polo</h2>
+          <h2 style="font-size:20px;font-weight:700;margin:0">📝 Provas no Polo</h2>
           <div style="font-size:13px;color:var(--text3);margin-top:2px">Elegíveis a AV e AVS presenciais · adesão, agendamento e comparecimento</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1296,29 +1296,32 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
         </table>
       </div>
 
-      <!-- Painel de disparo em lote -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:14px;color:var(--text)">📨 Mensagem em lote — <span id="polo-sel-count" style="color:var(--primary)">0</span> selecionado(s)</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-          <div style="flex:1;min-width:160px">
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente</label>
-            <select id="polo-atend-sel" class="search-input" style="width:100%"><option value="">— selecione —</option></select>
+      <!-- Painel de disparo em lote — aparece só com selecionados -->
+      <div id="polo-lote-panel" style="display:none;position:sticky;top:60px;z-index:50;background:#1c3b6e;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 4px 20px rgba(0,0,0,.25)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:700;color:#fff">📨 <span id="polo-sel-count" style="font-size:18px;color:#74c0fc">0</span> aluno(s) selecionado(s)</div>
+          <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff;border:none" onclick="toggleTodosPolo(false);document.getElementById('polo-check-all').checked=false">✕ Limpar seleção</button>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:150px">
+            <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:3px;text-transform:uppercase">Atendente</label>
+            <select id="polo-atend-sel" class="search-input" style="width:100%;height:32px"></select>
           </div>
-          <div style="flex:1;min-width:140px">
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Canal</label>
-            <select id="polo-canal-sel" class="search-input" onchange="atualizarTemplatePolo()" style="width:100%">
+          <div style="flex:1;min-width:120px">
+            <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:3px;text-transform:uppercase">Canal</label>
+            <select id="polo-canal-sel" class="search-input" onchange="atualizarTemplatePolo()" style="width:100%;height:32px">
               <option value="WhatsApp">💬 WhatsApp</option>
               <option value="E-mail">✉️ E-mail</option>
             </select>
           </div>
-        </div>
-        <div style="margin-top:12px">
-          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Mensagem <span style="font-weight:400;font-size:10px;color:var(--text3);margin-left:6px">variáveis: {nome} {curso} {atendente} {tipo_prova}</span></label>
-          <textarea id="polo-msg-template" class="search-input" rows="3" style="width:100%;resize:vertical;font-family:inherit;font-size:13px" placeholder="Digite a mensagem..."></textarea>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="dispararLotePolo()">🚀 Disparar em lote</button>
-          <button class="btn btn-sm" onclick="atualizarTemplatePolo()">🔄 Sugerir mensagem</button>
+          <div style="flex:3;min-width:220px">
+            <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:3px;text-transform:uppercase">Mensagem <span style="font-weight:400">{nome} {curso} {atendente} {tipo_prova}</span></label>
+            <textarea id="polo-msg-template" class="search-input" rows="2" style="width:100%;resize:vertical;font-family:inherit;font-size:12px;height:54px" placeholder="Digite a mensagem..."></textarea>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn btn-primary" onclick="dispararLotePolo()" style="white-space:nowrap">🚀 Disparar em lote</button>
+            <button class="btn btn-sm" onclick="atualizarTemplatePolo()" style="white-space:nowrap;background:rgba(255,255,255,.15);color:#fff;border:none">🔄 Sugerir mensagem</button>
+          </div>
         </div>
       </div>
     </div>
@@ -9000,7 +9003,7 @@ function renderPolo() {
   });
 
   setText('polo-lista-count', lista.length+' aluno(s)');
-  _POLO_SELECTED.clear(); setText('polo-sel-count',0);
+  _POLO_SELECTED.clear(); _atualizarPainelPolo();
   var allChk=document.getElementById('polo-check-all'); if(allChk) allChk.checked=false;
   var tb=document.getElementById('polo-tabela-body'); if(!tb) return;
   if(!lista.length){ tb.innerHTML='<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">Nenhum aluno encontrado.</td></tr>'; return; }
@@ -9064,9 +9067,16 @@ function salvarObsPolo(key,v){
   POLO_DATA[key].obs=v; POLO_DATA[key]._ts=Date.now(); _savePoloData();
 }
 
+function _atualizarPainelPolo(){
+  var n = _POLO_SELECTED.size;
+  setText('polo-sel-count', n);
+  var painel = document.getElementById('polo-lote-panel');
+  if (painel) painel.style.display = n > 0 ? 'block' : 'none';
+}
+
 function toggleSelectPolo(mat,checked){
   if(checked) _POLO_SELECTED.add(mat); else _POLO_SELECTED.delete(mat);
-  setText('polo-sel-count',_POLO_SELECTED.size);
+  _atualizarPainelPolo();
 }
 
 function toggleTodosPolo(checked){
@@ -9074,7 +9084,7 @@ function toggleTodosPolo(checked){
     cb.checked=checked; var m=cb.getAttribute('data-mat');
     if(m){ if(checked) _POLO_SELECTED.add(m); else _POLO_SELECTED.delete(m); }
   });
-  setText('polo-sel-count',_POLO_SELECTED.size);
+  _atualizarPainelPolo();
 }
 
 function atualizarTemplatePolo(){
