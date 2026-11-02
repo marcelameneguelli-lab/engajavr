@@ -1,11 +1,20 @@
-const CACHE_VERSION = 'v2';
+// Service Worker do EngajaVR
+// Usa caminhos relativos ao escopo do SW para funcionar em qualquer subpath
+// (GitHub Pages em /engajavr/ e Cloudflare Workers na raiz /)
+
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = 'engajavr-' + CACHE_VERSION;
+
+// Calcula o base path a partir de onde o sw.js foi registrado
+// Em GitHub Pages: /engajavr/   Em Cloudflare: /
+const BASE = self.registration.scope;
+
 const ASSETS = [
-  '/engajavr/',
-  '/engajavr/index.html',
-  '/engajavr/manifest.json',
-  '/engajavr/icon-192.png',
-  '/engajavr/icon-512.png'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png'
 ];
 
 self.addEventListener('install', function(e) {
@@ -54,7 +63,7 @@ self.addEventListener('fetch', function(e) {
       })
       .catch(function() {
         return caches.match(e.request).then(function(cached) {
-          return cached || caches.match('/engajavr/index.html');
+          return cached || caches.match(BASE + 'index.html');
         });
       })
   );
