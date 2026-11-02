@@ -3122,17 +3122,17 @@ function applyFilters() {
       if (trancamento === 'nao' && flagTranc) return false;
     }
     // Filtro aproveitamento acadêmico
+    // Base entrega: '0%', '100%', 'PARCIAL' (maiúsculo) ou vazio
     if (aprov) {
-      const av = (r.APROVEITAMENTO_ACADEMICO_ATUAL || '').trim();
-      const pct = parseInt(av, 10);
-      if (aprov === '0%'    && !(av === '0%' || av === '' || isNaN(pct) || pct === 0)) return false;
-      if (aprov === '100%'  && av !== '100%') return false;
-      if (aprov === 'parcial' && (isNaN(pct) || pct <= 0 || pct >= 100)) return false;
+      const av = (r.APROVEITAMENTO_ACADEMICO_ATUAL || '').trim().toUpperCase();
+      if (aprov === '0%'      && av !== '0%')      return false;
+      if (aprov === '100%'    && av !== '100%')     return false;
+      if (aprov === 'parcial' && av !== 'PARCIAL')  return false;
     }
-    // Filtro SE: usa ELEGIVEL_SE e ADESAO_SE
+    // Filtro SE: base entrega '0'/'1' como string
     if (critSE) {
-      const seElig = r['ELEGIVEL_SE']===1||r['ELEGIVEL_SE']==='1'||parseFloat(r['ELEGIVEL_SE'])===1;
-      const seFez  = r['ADESAO_SE']==='fez'||r['ADESAO_SE']==='100%'||r['ADESAO_SE']===1||r['ADESAO_SE']==='1'||parseFloat(r['ADESAO_SE'])===1;
+      const seElig = parseFloat(r['ELEGIVEL_SE']) === 1;
+      const seFez  = parseFloat(r['ADESAO_SE'])   === 1;
       if (critSE === 'pendente' && !(seElig && !seFez)) return false;
       if (critSE === 'fez'      && !(seElig && seFez))  return false;
     }
