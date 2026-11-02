@@ -1267,6 +1267,14 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <option value="">Todos os cursos</option>
           </select>
         </div>
+        <div style="flex:1;min-width:130px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Data de</label>
+          <input type="date" id="polo-filtro-dt-de" class="search-input" onchange="renderPolo()" style="width:100%">
+        </div>
+        <div style="flex:1;min-width:130px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Data até</label>
+          <input type="date" id="polo-filtro-dt-ate" class="search-input" onchange="renderPolo()" style="width:100%">
+        </div>
         <div style="flex:2;min-width:200px">
           <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Busca</label>
           <input type="text" id="polo-busca" class="search-input" placeholder="Nome ou matrícula..." oninput="renderPolo()" style="width:100%">
@@ -8957,6 +8965,28 @@ function getSituacaoPolo(r, tipo) {
   return 'nao_agendou';
 }
 
+// Converte qualquer formato de data para AAAA-MM-DD (string comparável)
+// Aceita: "2026-10-31", "2026/10/31", "31/10/2026", "31-10-2026", timestamp ISO
+function _dtParaISO(val) {
+  if (!val) return '';
+  var s = val.toString().split('T')[0].trim();
+  // Já está em AAAA-MM-DD ou AAAA/MM/DD
+  var m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if (m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  // DD/MM/AAAA ou DD-MM-AAAA
+  m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return '';
+}
+
+// Formata para DD/MM/AA para exibição
+function _dtForDisplay(val) {
+  var iso = _dtParaISO(val);
+  if (!iso) return '';
+  var p = iso.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0].slice(-2);
+}
+
 function filtrarPoloPage(tipo) {
   var el = document.getElementById('polo-filtro-sit');
   if (el) el.value = tipo;
@@ -8972,6 +9002,8 @@ function renderPolo() {
   var tipo       = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
   var filtroSit  = (document.getElementById('polo-filtro-sit')||{}).value||'todos';
   var filtroCurso= ((document.getElementById('polo-filtro-curso')||{}).value||'').trim();
+  var filtroDtDe = (document.getElementById('polo-filtro-dt-de')||{}).value||'';
+  var filtroDtAte= (document.getElementById('polo-filtro-dt-ate')||{}).value||'';
   var busca      = ((document.getElementById('polo-busca')||{}).value||'').toLowerCase().trim();
 
   var elegiveis = DB.filter(function(r){ return isEligPolo(r, tipo); });
@@ -8995,6 +9027,12 @@ function renderPolo() {
     var sit = getSituacaoPolo(r, tipo);
     if (filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
     if (busca){ var nm=(r.NOM_ALUNO||'').toLowerCase(), mt=(r.COD_MATRICULA||'').toLowerCase(); if(!nm.includes(busca)&&!mt.includes(busca)) return false; }
+    // Filtro por data da próxima prova (compara em formato ISO AAAA-MM-DD)
+    if (filtroDtDe || filtroDtAte) {
+      var dtISO = _dtParaISO(r['DT_PROXIMA_PROVA_AGENDADA']);
+      if (filtroDtDe  && (!dtISO || dtISO < filtroDtDe))  return false;
+      if (filtroDtAte && (!dtISO || dtISO > filtroDtAte)) return false;
+    }
     if (filtroSit === 'sem_adesao')       return sit !== 'agendado';
     if (filtroSit === 'agendado')         return sit === 'agendado';
     if (filtroSit === 'modalidade_ead')   return (r.MODALIDADE_PP_PC||'').toUpperCase() === 'EAD';
@@ -9027,12 +9065,8 @@ function renderPolo() {
     var statusExtra = status ? '<br><span style="font-size:10px;color:var(--text3)">'+status+'</span>' : '';
     var casaBadge   = qtdCasa>0 ? ' <span class="badge badge-gray" style="font-size:10px" title="Elegível em casa: '+qtdCasa+'">🏠 '+qtdCasa+'</span>' : '';
 
-    // Data da prova vinda diretamente da base (aceita AAAA-MM-DD ou AAAA/MM/DD)
-    var dtRaw = (r['DT_PROXIMA_PROVA_AGENDADA']||'').toString().split('T')[0];
-    var dtPartes = dtRaw.indexOf('-') >= 0 ? dtRaw.split('-') : dtRaw.indexOf('/') >= 0 ? dtRaw.split('/') : [];
-    var dtFormatada = dtPartes.length === 3
-      ? dtPartes[2].padStart(2,'0') + '/' + dtPartes[1].padStart(2,'0') + '/' + dtPartes[0].slice(-2)
-      : (dtRaw ? dtRaw : '<span style="color:var(--text3)">—</span>');
+    // Data da prova usando helper centralizado (aceita qualquer formato da base)
+    var dtFormatada = _dtForDisplay(r['DT_PROXIMA_PROVA_AGENDADA']) || '<span style="color:var(--text3)">—</span>';
     var obsVal       = (d.obs||'').replace(/"/g,'&quot;');
 
     return '<tr>'+
