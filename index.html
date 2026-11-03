@@ -7310,6 +7310,43 @@ var LOTE_MODELOS = {
 // Canal ativo no modal de lote
 var _LOTE_CANAL = 'WhatsApp';
 
+// Wrapper síncrono do botão principal do lote.
+// Para E-mail chama _gerarMalaDiretaSync (síncrono — mantém contexto de evento
+// do usuário, necessário para que o browser aceite o download automático).
+// Para outros canais delega ao executarLote async normalmente.
+function _clicarBtnLote() {
+  if (_LOTE_CANAL === 'E-mail') {
+    // Validações rápidas antes de entrar na função síncrona
+    var atend = (document.getElementById('lote-atend') || {}).value || '';
+    if (!atend || !atend.trim()) {
+      var resEl = document.getElementById('lote-result');
+      resEl.className = 'lote-result err'; resEl.style.display = 'block';
+      resEl.textContent = 'Informe o atendente.'; return;
+    }
+    if (!LOTE_ALUNOS || !LOTE_ALUNOS.length) {
+      var resEl2 = document.getElementById('lote-result');
+      resEl2.className = 'lote-result err'; resEl2.style.display = 'block';
+      resEl2.textContent = 'Nenhum aluno selecionado.'; return;
+    }
+    var modeloKey = (document.getElementById('lote-modelo') || {}).value || '';
+    var modeloData = LOTE_MODELOS[modeloKey] || {};
+    var motivo = modeloData.motivo || 'academico';
+    var obs = (document.getElementById('lote-obs') || {}).value || '';
+    var emailMsgTpl  = (document.getElementById('lote-email-msg')  || {}).value || '';
+    var emailSubjTpl = (document.getElementById('lote-email-subj') || {}).value || '';
+    var hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    var resElE = document.getElementById('lote-result');
+    var footerNormal = document.getElementById('lote-footer-normal');
+    var malaPanel = document.getElementById('lote-mala-panel');
+    resElE.className = 'lote-result'; resElE.style.display = 'block';
+    resElE.textContent = '⏳ Gerando planilha...';
+    // loteEntries vazio aqui — será preenchido no "Registrar como enviados"
+    _gerarMalaDiretaSync(atend.trim(), obs, motivo, emailMsgTpl, emailSubjTpl, hoje, [], resElE, footerNormal, malaPanel);
+  } else {
+    executarLote('');
+  }
+}
+
 function selecionarCanalLote(canal) {
   _LOTE_CANAL = canal;
   document.getElementById('lote-cbtn-wa').classList.toggle('ativo',    canal === 'WhatsApp');
@@ -7601,63 +7638,9 @@ async function executarLote(canalParam) {
     return;
   }
 
-  // ── E-mail: gerar XLSX mala direta e mostrar painel de instruções ──
-  // Gera para todos os alunos do lote, mesmo que alguns não tenham e-mail cadastrado
+  // ── E-mail: delegar para função síncrona (sem async/await no caminho do download) ──
   if (canal === 'E-mail') {
-    console.log('[executarLote] entrando bloco E-mail, LOTE_ALUNOS:', LOTE_ALUNOS.length);
-    try {
-      // Incluir TODOS os alunos (com e-mail ou não) para a mala direta
-      var emailListCompleta = LOTE_ALUNOS.map(function(r) {
-        var c = CONTACTS[r.COD_MATRICULA] || {};
-        var emailAluno = c.email || r.END_EMAIL || '';
-        var msgAluno = _emailMsgTpl
-          ? substituirVarsEmail(_emailMsgTpl, r, atend)
-          : (buildMessage(r, motivo, canal) || obs || 'Acionamento via lote');
-        var subjAluno = _emailSubjTpl
-          ? substituirVarsEmail(_emailSubjTpl, r, atend)
-          : ('[Estácio] ' + cap(r.NOM_CURSO));
-        return { email: emailAluno, nome: cap(r.NOM_ALUNO), msg: msgAluno, subj: subjAluno, matricula: r.COD_MATRICULA, curso: cap(r.NOM_CURSO) };
-      });
-
-      var semEmailCount = emailListCompleta.filter(function(e){ return !e.email; }).length;
-
-      // Guardar pendências para registro tardio
-      _LOTE_EMAIL_LIST = emailListCompleta;
-      _LOTE_ENTRIES_PENDENTES = loteEntries;
-
-      // Gerar XLSX
-      var xlsxResult = gerarXlsxMalaDireta(emailListCompleta);
-      console.log('[executarLote] xlsxResult:', xlsxResult && xlsxResult.ext, xlsxResult && xlsxResult.blob && xlsxResult.blob.size);
-      _LOTE_XLSX_BLOB = xlsxResult;
-      var nomeArquivo = 'mala_direta_' + hoje + '_' + emailListCompleta.length + 'alunos.' + xlsxResult.ext;
-      // Anexar ao body antes de clicar garante que o browser aceite o download
-      (function(blob, nome) {
-        var blobUrl = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = nome;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function(){ URL.revokeObjectURL(blobUrl); if (a.parentNode) a.parentNode.removeChild(a); }, 500);
-      })(xlsxResult.blob, nomeArquivo);
-
-      // Preencher painel
-      var assuntoBase = emailListCompleta[0] ? emailListCompleta[0].subj : '[Estácio] Mensagem';
-      document.getElementById('lote-mala-nome-arquivo').textContent = '✅ Planilha gerada: ' + nomeArquivo;
-      document.getElementById('lote-mala-subtitulo').textContent = emailListCompleta.length + ' alunos' +
-        (semEmailCount > 0 ? ' (' + semEmailCount + ' sem e-mail — incluídos com campo vazio)' : '') +
-        '. Ela está na pasta Downloads.';
-      document.getElementById('lote-mala-assunto').value = assuntoBase;
-
-      // Esconder footer normal e mostrar painel
-      resEl.style.display = 'none';
-      if (footerNormal) footerNormal.style.display = 'none';
-      if (malaPanel) malaPanel.classList.add('ativo');
-    } catch(err) {
-      resEl.className = 'lote-result err'; resEl.style.display = 'block';
-      resEl.textContent = '❌ Erro ao gerar planilha: ' + (err.message || err);
-      console.error('[executarLote E-mail]', err);
-    }
+    _gerarMalaDiretaSync(atend, obs, motivo, _emailMsgTpl, _emailSubjTpl, hoje, loteEntries, resEl, footerNormal, malaPanel);
     return;
   }
 
@@ -7680,6 +7663,76 @@ var _LOTE_EMAIL_LIST = []; // cache para "baixar de novo" e registro tardio
 var _LOTE_ENTRIES_PENDENTES = []; // acionamentos aguardando "registrar como enviados"
 var _LOTE_XLSX_BLOB = null; // blob para re-download
 var _loteOverlayDown = null; // guarda onde o mousedown iniciou (evita fechar ao arrastar de dentro para fora)
+
+// Função SÍNCRONA para gerar mala direta — não pode ter async/await no caminho
+// até o a.click(), pois browsers bloqueiam downloads iniciados fora do contexto
+// direto de evento do usuário (o async quebra esse contexto).
+function _gerarMalaDiretaSync(atend, obs, motivo, emailMsgTpl, emailSubjTpl, hoje, _ignorado, resEl, footerNormal, malaPanel) {
+  try {
+    var now = new Date();
+    var datetime = now.toLocaleString('pt-BR');
+    var date = now.toLocaleDateString('pt-BR');
+    var loteEntries = [];
+
+    var emailListCompleta = LOTE_ALUNOS.map(function(r) {
+      var c = CONTACTS[r.COD_MATRICULA] || {};
+      var emailAluno = c.email || r.END_EMAIL || '';
+      var msgAluno = emailMsgTpl
+        ? substituirVarsEmail(emailMsgTpl, r, atend)
+        : (buildMessage(r, motivo, 'E-mail') || obs || 'Acionamento via lote');
+      var subjAluno = emailSubjTpl
+        ? substituirVarsEmail(emailSubjTpl, r, atend)
+        : ('[Estácio] ' + cap(r.NOM_CURSO));
+
+      // Registrar no HISTORY para cada aluno
+      if (!HISTORY[r.COD_MATRICULA]) HISTORY[r.COD_MATRICULA] = [];
+      var entry = {
+        datetime: datetime, date: date,
+        atend: atend, canal: 'E-mail', tipo: 'E-mail',
+        motivo: motivo, obs: obs || ('Disparo em lote — ' + LOTE_ALUNOS.length + ' alunos'),
+        nps: '', nps_tipo: '',
+        matricula: r.COD_MATRICULA,
+        base: ACTIVE_BASE
+      };
+      HISTORY[r.COD_MATRICULA].push(entry);
+      loteEntries.push(entry);
+
+      return { email: emailAluno, nome: cap(r.NOM_ALUNO), msg: msgAluno, subj: subjAluno, matricula: r.COD_MATRICULA, curso: cap(r.NOM_CURSO) };
+    });
+
+    var semEmailCount = emailListCompleta.filter(function(e){ return !e.email; }).length;
+    _LOTE_EMAIL_LIST = emailListCompleta;
+    _LOTE_ENTRIES_PENDENTES = loteEntries;
+
+    // Gerar e disparar download — síncrono, dentro do contexto do evento
+    var xlsxResult = gerarXlsxMalaDireta(emailListCompleta);
+    _LOTE_XLSX_BLOB = xlsxResult;
+    var nomeArquivo = 'mala_direta_' + hoje + '_' + emailListCompleta.length + 'alunos.' + xlsxResult.ext;
+    var blobUrl = URL.createObjectURL(xlsxResult.blob);
+    var a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(blobUrl); if (a.parentNode) a.parentNode.removeChild(a); }, 500);
+
+    // Preencher painel de instruções
+    var assuntoBase = emailListCompleta[0] ? emailListCompleta[0].subj : '[Estácio] Mensagem';
+    document.getElementById('lote-mala-nome-arquivo').textContent = '✅ Planilha gerada: ' + nomeArquivo;
+    document.getElementById('lote-mala-subtitulo').textContent = emailListCompleta.length + ' alunos' +
+      (semEmailCount > 0 ? ' (' + semEmailCount + ' sem e-mail — incluídos com campo vazio)' : '') +
+      '. Ela está na pasta Downloads.';
+    document.getElementById('lote-mala-assunto').value = assuntoBase;
+
+    resEl.style.display = 'none';
+    if (footerNormal) footerNormal.style.display = 'none';
+    if (malaPanel) malaPanel.classList.add('ativo');
+  } catch(err) {
+    resEl.className = 'lote-result err'; resEl.style.display = 'block';
+    resEl.textContent = '❌ Erro ao gerar planilha: ' + (err.message || err);
+    console.error('[_gerarMalaDiretaSync]', err);
+  }
+}
 
 function gerarXlsxMalaDireta(emailList) {
   // Monta dados para a aba MalaDireta
@@ -9891,7 +9944,7 @@ function exportarRelatorioXLSX() {
       <div class="lote-footer" id="lote-footer-normal">
         <span style="font-size:12px;color:var(--text3);flex:1" id="lote-footer-info"></span>
         <button class="btn" onclick="fecharLote()">Cancelar</button>
-        <button class="btn btn-primary" id="lote-btn-acao" onclick="executarLote('')">⬇ Baixar CSV WhatsApp</button>
+        <button class="btn btn-primary" id="lote-btn-acao" onclick="_clicarBtnLote()">⬇ Baixar CSV WhatsApp</button>
       </div>
     </div>
   </div>
