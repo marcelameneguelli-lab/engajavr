@@ -7799,18 +7799,23 @@ async function registrarEnviadosLote() {
   var btn = document.querySelector('#lote-mala-panel .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
 
-  // Salvar history local
-  var cfg = BASE_CONFIG[ACTIVE_BASE];
-  await STORE.set(cfg.storageH, HISTORY);
-  try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+  try {
+    // Salvar history local
+    var cfg = BASE_CONFIG[ACTIVE_BASE];
+    try { await STORE.set(cfg.storageH, HISTORY); } catch(e) { console.warn('STORE.set falhou:', e); }
+    try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
 
-  // Enviar ao GAS em lote
-  if (GAS_URL && _LOTE_ENTRIES_PENDENTES.length > 0) {
-    gasCall('saveActionLote', { entries: _LOTE_ENTRIES_PENDENTES, base: ACTIVE_BASE }).catch(function(){});
+    // Enviar ao GAS em lote (fire-and-forget)
+    if (GAS_URL && _LOTE_ENTRIES_PENDENTES.length > 0) {
+      gasCall('saveActionLote', { entries: _LOTE_ENTRIES_PENDENTES, base: ACTIVE_BASE }).catch(function(){});
+    }
+
+    applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
+  } catch(e) {
+    console.error('registrarEnviadosLote erro:', e);
+  } finally {
+    fecharLote();
   }
-
-  applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
-  fecharLote();
 }
 
 function fecharLoteSemRegistrar() {
