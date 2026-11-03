@@ -4094,7 +4094,7 @@ function renderDashboard() {
 // ========== PRODUTIVIDADE ==========
 // Estado dos filtros de produtividade
 // PROD_FILTER_DAYS: -1 = semestre atual (a partir de PROD_CUTOFF_DATE), 0 = todos, 7/30/90 = últimos N dias
-let PROD_FILTER_DAYS = -1;
+let PROD_FILTER_DAYS = 0;
 let PROD_CUTOFF_DATE = '2026-08-01'; // início do semestre 2026.3 — altere aqui quando mudar o semestre
 let PROD_FILTER_ATEND = '';
 let PROD_FILTER_BASE = 'current';
@@ -4163,7 +4163,8 @@ function renderProdutividade() {
   } else if (PROD_FILTER_DAYS > 0) {
     const d = new Date();
     const c = new Date(d.getFullYear(), d.getMonth(), d.getDate() - PROD_FILTER_DAYS + 1);
-    cutoffStr = c.toISOString().slice(0,10);
+    const _p = n => String(n).padStart(2,'0');
+    cutoffStr = c.getFullYear() + '-' + _p(c.getMonth()+1) + '-' + _p(c.getDate());
   }
 
   // Bases a incluir
@@ -4504,7 +4505,9 @@ async function saveSnapshot(label) {
 function getRecentActions(days) {
   const today = new Date();
   const cutoffDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
-  const cutoffStr = cutoffDate.toISOString().slice(0,10);
+  // Usar data local (sem conversão UTC) para evitar problema de timezone
+  const pad = n => String(n).padStart(2,'0');
+  const cutoffStr = cutoffDate.getFullYear() + '-' + pad(cutoffDate.getMonth()+1) + '-' + pad(cutoffDate.getDate());
   let count = 0; const students = new Set(), atends = new Set();
   Object.entries(HISTORY).forEach(([mat, h]) => h.forEach(a => {
     // Filtrar pela base ativa
@@ -4512,7 +4515,7 @@ function getRecentActions(days) {
     const raw = String(a.datetime || a.date || '');
     let dateStr = '';
     const mBR = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (mBR) dateStr = `${mBR[3]}-${mBR[2]}-${mBR[1]}`;
+    if (mBR) dateStr = mBR[3] + '-' + mBR[2] + '-' + mBR[1];
     else { const mISO = raw.match(/(\d{4}-\d{2}-\d{2})/); if (mISO) dateStr = mISO[1]; }
     if (!dateStr || dateStr < cutoffStr) return;
     count++; students.add(mat); if (a.atend) atends.add(a.atend);
