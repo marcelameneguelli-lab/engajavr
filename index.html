@@ -7885,26 +7885,36 @@ function copiarAssuntoLote() {
 
 async function registrarEnviadosLote() {
   if (!_LOTE_ENTRIES_PENDENTES.length) { fecharLote(); return; }
-  var btn = document.querySelector('#lote-mala-panel .btn-primary');
+  // Identificar o botão correto (dentro do lote-mala-footer)
+  var btn = document.querySelector('.lote-mala-footer .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
 
-  try {
-    // Salvar history local
-    var cfg = BASE_CONFIG[ACTIVE_BASE];
-    try { await STORE.set(cfg.storageH, HISTORY); } catch(e) { console.warn('STORE.set falhou:', e); }
-    try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+  // Usar setTimeout para garantir que a UI atualiza antes do processamento
+  setTimeout(async function() {
+    try {
+      var cfg = BASE_CONFIG[ACTIVE_BASE];
+      // Salvar no localStorage de forma assíncrona mas sem bloquear
+      try { localStorage.setItem(cfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
+      // STORE.set em background — não aguarda para não travar a UI
+      STORE.set(cfg.storageH, HISTORY).catch(function(e){ console.warn('STORE.set lote:', e); });
 
-    // Enviar ao GAS em lote (fire-and-forget)
-    if (GAS_URL && _LOTE_ENTRIES_PENDENTES.length > 0) {
-      gasCall('saveActionLote', { entries: _LOTE_ENTRIES_PENDENTES, base: ACTIVE_BASE }).catch(function(){});
+      // Enviar ao GAS em lote (fire-and-forget com fila de reenvio)
+      if (GAS_URL && _LOTE_ENTRIES_PENDENTES.length > 0) {
+        var entriesToSend = _LOTE_ENTRIES_PENDENTES.slice();
+        gasCall('saveActionLote', { entries: entriesToSend, base: ACTIVE_BASE })
+          .catch(function() {
+            // Se falhou, enfileirar cada entry individualmente para reenvio
+            entriesToSend.forEach(function(e){ _enfileirarReenvio(e); });
+          });
+      }
+
+      applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
+    } catch(e) {
+      console.error('registrarEnviadosLote erro:', e);
+    } finally {
+      fecharLote();
     }
-
-    applyFilters(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); limparSelecao();
-  } catch(e) {
-    console.error('registrarEnviadosLote erro:', e);
-  } finally {
-    fecharLote();
-  }
+  }, 50);
 }
 
 function fecharLoteSemRegistrar() {
