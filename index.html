@@ -7498,13 +7498,15 @@ async function executarLote(canalParam) {
   var modeloData = LOTE_MODELOS[modeloKey] || {};
   var motivo = modeloData.motivo || 'academico';
 
+  console.log('[executarLote] canal:', canal, '| atend:', atend, '| LOTE_ALUNOS:', LOTE_ALUNOS && LOTE_ALUNOS.length);
   if (!atend)  { resEl.className='lote-result err'; resEl.style.display='block'; resEl.textContent='Informe o atendente.'; return; }
   if (!canal)  { resEl.className='lote-result err'; resEl.style.display='block'; resEl.textContent='Selecione o canal.'; return; }
   if (!LOTE_ALUNOS || !LOTE_ALUNOS.length) { resEl.className='lote-result err'; resEl.style.display='block'; resEl.textContent='Nenhum aluno selecionado.'; return; }
 
   resEl.className='lote-result'; resEl.style.display='block';
   resEl.textContent = '⏳ Processando ' + LOTE_ALUNOS.length + ' alunos...';
-  await new Promise(function(res){ setTimeout(res, 50); });
+  // Não usar await aqui: preserva o contexto de evento do usuário, necessário
+  // para que o browser permita o download automático sem bloqueio de popup.
 
   localStorage.setItem('crm_last_atend', atend);
 
@@ -7602,6 +7604,7 @@ async function executarLote(canalParam) {
   // ── E-mail: gerar XLSX mala direta e mostrar painel de instruções ──
   // Gera para todos os alunos do lote, mesmo que alguns não tenham e-mail cadastrado
   if (canal === 'E-mail') {
+    console.log('[executarLote] entrando bloco E-mail, LOTE_ALUNOS:', LOTE_ALUNOS.length);
     try {
       // Incluir TODOS os alunos (com e-mail ou não) para a mala direta
       var emailListCompleta = LOTE_ALUNOS.map(function(r) {
@@ -7624,11 +7627,19 @@ async function executarLote(canalParam) {
 
       // Gerar XLSX
       var xlsxResult = gerarXlsxMalaDireta(emailListCompleta);
+      console.log('[executarLote] xlsxResult:', xlsxResult && xlsxResult.ext, xlsxResult && xlsxResult.blob && xlsxResult.blob.size);
       _LOTE_XLSX_BLOB = xlsxResult;
       var nomeArquivo = 'mala_direta_' + hoje + '_' + emailListCompleta.length + 'alunos.' + xlsxResult.ext;
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(xlsxResult.blob);
-      a.download = nomeArquivo; a.click(); URL.revokeObjectURL(a.href);
+      // Anexar ao body antes de clicar garante que o browser aceite o download
+      (function(blob, nome) {
+        var blobUrl = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = nome;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function(){ URL.revokeObjectURL(blobUrl); if (a.parentNode) a.parentNode.removeChild(a); }, 500);
+      })(xlsxResult.blob, nomeArquivo);
 
       // Preencher painel
       var assuntoBase = emailListCompleta[0] ? emailListCompleta[0].subj : '[Estácio] Mensagem';
