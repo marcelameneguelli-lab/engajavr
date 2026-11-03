@@ -2359,6 +2359,8 @@ async function syncFromRemote() {
   }
   if (dot) dot.className = 'sync-dot';
   if (changed) { renderTable(); renderDashboard(); renderProdutividade(); updatePriorityCounts(); }
+  // A cada sync, tentar reenviar acionamentos que falharam anteriormente
+  if (GAS_URL) { _processarFilaReenvio().catch(function(){}); }
 }
 
 // ========== INIT ==========
@@ -2920,16 +2922,22 @@ async function init() {
       }
     }).catch(function(){});
   }
+  // Processar fila de reenvio de acionamentos pendentes (falhas anteriores)
+  if (GAS_URL) { _processarFilaReenvio().catch(function(){}); }
   // Sync from GAS immediately on load (don't wait 15s)
   if (GAS_URL) {
     syncFromRemote().then(() => {
       // After first sync, check if we got fresh history
       if (Object.keys(HISTORY).length > 0) renderTable();
+      // Processar fila novamente após sync (pode ter chegado acionamentos novos ao HISTORY)
+      _processarFilaReenvio().catch(function(){});
     });
   }
   // Continue polling every 15s
   updateFuTabBadge();
   setInterval(syncFromRemote, 15000);
+  // Reprocessar fila a cada 2 minutos (garante reenvio mesmo após falhas repetidas)
+  setInterval(function(){ _processarFilaReenvio().catch(function(){}); }, 120000);
 }
 
 async function decompressB64(b64) {
@@ -3863,10 +3871,16 @@ async function saveAction() {
   try { await STORE.set(_bCfg.storageC, CONTACTS); } catch(e) {}
   try { localStorage.setItem(_bCfg.storageC, JSON.stringify(CONTACTS)); } catch(e) {}
 
-  // Push ao GAS — fire-and-forget com retry único
+  // Push ao GAS — fire-and-forget com fila de reenvio persistente
   if (GAS_URL) {
     gasCall('saveAction', entry).catch(function() {
-      setTimeout(function(){ gasCall('saveAction', entry).catch(function(){}); }, 5000);
+      // Falhou: adicionar à fila de reenvio persistente
+      _enfileirarReenvio(entry);
+      // Retry após 5s
+      setTimeout(function(){
+        gasCall('saveAction', entry).then(function(r){ if(r&&r.ok) _removerDaFila(entry.id); })
+          .catch(function(){});
+      }, 5000);
     });
     gasCall('saveContact', contato).catch(function(){});
   }
@@ -4101,6 +4115,47 @@ function renderDashboard() {
 }
 
 // ========== PRODUTIVIDADE ==========
+// ── FILA DE REENVIO PERSISTENTE ──────────────────────────────────
+// Acionamentos que falharam no envio ao GAS são guardados aqui e
+// reenviados automaticamente no próximo startup e a cada sync.
+var _FILA_REENVIO_KEY = 'crm_reenvio_pendente';
+
+function _enfileirarReenvio(entry) {
+  try {
+    var fila = JSON.parse(localStorage.getItem(_FILA_REENVIO_KEY) || '[]');
+    var jaExiste = fila.some(function(e){ return e.id === entry.id; });
+    if (!jaExiste) { fila.push(entry); localStorage.setItem(_FILA_REENVIO_KEY, JSON.stringify(fila)); }
+  } catch(e) {}
+}
+
+function _removerDaFila(id) {
+  try {
+    var fila = JSON.parse(localStorage.getItem(_FILA_REENVIO_KEY) || '[]');
+    fila = fila.filter(function(e){ return e.id !== id; });
+    localStorage.setItem(_FILA_REENVIO_KEY, JSON.stringify(fila));
+  } catch(e) {}
+}
+
+async function _processarFilaReenvio() {
+  if (!GAS_URL) return;
+  var fila = [];
+  try { fila = JSON.parse(localStorage.getItem(_FILA_REENVIO_KEY) || '[]'); } catch(e) { return; }
+  if (!fila.length) return;
+  console.log('[reenvio] ' + fila.length + ' acionamentos pendentes na fila, tentando reenviar...');
+  var reenviados = [];
+  for (var i = 0; i < fila.length; i++) {
+    var entry = fila[i];
+    try {
+      var r = await gasCall('saveAction', entry);
+      if (r && r.ok) { reenviados.push(entry.id); console.log('[reenvio] OK: ' + entry.id); }
+    } catch(ex) {}
+  }
+  if (reenviados.length) {
+    reenviados.forEach(_removerDaFila);
+    console.log('[reenvio] ' + reenviados.length + ' reenviados com sucesso');
+  }
+}
+
 // Estado dos filtros de produtividade
 // PROD_FILTER_DAYS: -1 = semestre atual (a partir de PROD_CUTOFF_DATE), 0 = todos, 7/30/90 = últimos N dias
 let PROD_FILTER_DAYS = 0;
