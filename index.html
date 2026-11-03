@@ -2260,23 +2260,8 @@ async function syncFromRemote() {
       }
     }
     if (hr && hr.ok && hr.data) {
-      // GAS é a fonte de verdade — reconstruir HISTORY da base ativa a partir dele,
-      // mas preservando acionamentos criados localmente que ainda não foram confirmados no GAS
+      // Merge bidirecional: GAS é referência, mas entries locais ausentes no GAS são preservados
       let mergeChanged = false;
-      const localOnlyByMat = {};
-      // Guardar entradas locais que têm menos de 30s (podem não ter chegado ao GAS ainda)
-      const now = Date.now();
-      Object.entries(HISTORY).forEach(([mat, entries]) => {
-        entries.forEach(a => {
-          if (a.id) {
-            const ts = parseInt((a.id.match(/ac_(\d+)_/) || [])[1] || '0');
-            if (ts && (now - ts) < 30000) {
-              if (!localOnlyByMat[mat]) localOnlyByMat[mat] = [];
-              localOnlyByMat[mat].push(a);
-            }
-          }
-        });
-      });
 
       // Reconstruir HISTORY a partir do GAS (deduplicado por id no próprio merge)
       const novoHistory = {};
@@ -2289,12 +2274,20 @@ async function syncFromRemote() {
         });
       });
 
-      // Reinjetar entradas locais recentes que talvez ainda não tenham sido salvas no GAS
-      Object.entries(localOnlyByMat).forEach(([mat, entries]) => {
+      // Merge COMPLETO: nunca descartar entries locais que o GAS não tem
+      // (cobre falhas de saveAction, atrasos de rede, etc.)
+      Object.entries(HISTORY).forEach(([mat, entries]) => {
         if (!novoHistory[mat]) novoHistory[mat] = [];
+        const gasIds = new Set(novoHistory[mat].map(a => a.id || ((a.datetime||'')+'|'+(a.atend||''))));
         entries.forEach(a => {
-          const exists = novoHistory[mat].some(x => x.id === a.id);
-          if (!exists) novoHistory[mat].push(a);
+          const k = a.id || ((a.datetime||'') + '|' + (a.atend||''));
+          if (!gasIds.has(k)) {
+            // Entry local não está no GAS — manter e tentar reenviar
+            novoHistory[mat].push(a);
+            if (GAS_URL && a.id) {
+              gasCall('saveAction', a).catch(function(){});
+            }
+          }
         });
       });
 
@@ -3852,13 +3845,18 @@ async function saveAction() {
   };
   HISTORY[CURRENT_MAT].push(entry);
   const _bCfg = BASE_CONFIG[ACTIVE_BASE];
-  await STORE.set(_bCfg.storageH, HISTORY);
+  // Salvar localmente (duplo fallback: STORE + localStorage)
+  try { await STORE.set(_bCfg.storageH, HISTORY); } catch(e) { console.warn('STORE history:', e); }
+  try { localStorage.setItem(_bCfg.storageH, JSON.stringify(HISTORY)); } catch(e) {}
   const contato = { matricula: CURRENT_MAT, cel, fone, email };
-  await STORE.set(_bCfg.storageC, CONTACTS);
+  try { await STORE.set(_bCfg.storageC, CONTACTS); } catch(e) {}
+  try { localStorage.setItem(_bCfg.storageC, JSON.stringify(CONTACTS)); } catch(e) {}
 
-  // Push ao GAS — fire-and-forget (não bloqueia o modal)
+  // Push ao GAS — fire-and-forget com retry único
   if (GAS_URL) {
-    gasCall('saveAction', entry).catch(function(e){ console.warn('GAS saveAction erro:', e.message); });
+    gasCall('saveAction', entry).catch(function() {
+      setTimeout(function(){ gasCall('saveAction', entry).catch(function(){}); }, 5000);
+    });
     gasCall('saveContact', contato).catch(function(){});
   }
 
