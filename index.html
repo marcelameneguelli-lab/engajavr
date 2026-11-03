@@ -2264,11 +2264,22 @@ async function syncFromRemote() {
       let mergeChanged = false;
 
       // Reconstruir HISTORY a partir do GAS (deduplicado por id no próprio merge)
+      // Normalizar datetime: GAS pode salvar em formato Date.toString() — converter para pt-BR
       const novoHistory = {};
       Object.entries(hr.data).forEach(([mat, entries]) => {
         const seen = new Set();
         novoHistory[mat] = [];
         entries.forEach(a => {
+          // Normalizar datetime para pt-BR se estiver em outro formato
+          if (a.datetime && !String(a.datetime).match(/^\d{2}\/\d{2}\/\d{4}/)) {
+            const iso = parseDateToISO(a.datetime);
+            if (iso) {
+              // Reconstruir como pt-BR (dd/mm/aaaa) para consistência
+              const parts = iso.split('-');
+              a.datetime = parts[2] + '/' + parts[1] + '/' + parts[0];
+              if (!a.date) a.date = a.datetime;
+            }
+          }
           const k = a.id || ((a.datetime||'') + '|' + (a.atend||''));
           if (!seen.has(k)) { seen.add(k); novoHistory[mat].push(a); }
         });
@@ -4097,6 +4108,38 @@ let PROD_CUTOFF_DATE = '2026-08-01'; // início do semestre 2026.3 — altere aq
 let PROD_FILTER_ATEND = '';
 let PROD_FILTER_BASE = 'current';
 
+// Parser central de data — aceita pt-BR (dd/mm/aaaa), ISO (aaaa-mm-dd)
+// e formato nativo JS do GAS ("Wed Sep 16 2026 18:35:01 GMT-0300...")
+// Retorna string "aaaa-mm-dd" ou '' se não reconhecer
+function parseDateToISO(raw) {
+  if (!raw) return '';
+  var s = String(raw);
+  // pt-BR: dd/mm/aaaa (pode ter hora depois)
+  var mBR = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (mBR) return mBR[3] + '-' + mBR[2] + '-' + mBR[1];
+  // ISO: aaaa-mm-dd
+  var mISO = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (mISO) return mISO[1] + '-' + mISO[2] + '-' + mISO[3];
+  // Formato GAS / Date.toString(): "Wed Sep 16 2026 18:35:01 GMT..."
+  // ou "Mon Nov 03 2026 10:00:00 GMT-0300 (Horário Padrão de Brasília)"
+  var mJS = s.match(/\w{3}\s+(\w{3})\s+(\d{1,2})\s+(\d{4})/);
+  if (mJS) {
+    var months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
+                  Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+    var m = months[mJS[1]] || '01';
+    var d = String(mJS[2]).padStart(2,'0');
+    return mJS[3] + '-' + m + '-' + d;
+  }
+  // Tentar Date.parse como último recurso
+  var ts = Date.parse(s);
+  if (!isNaN(ts)) {
+    var dt = new Date(ts);
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    return dt.getFullYear() + '-' + pad(dt.getMonth()+1) + '-' + pad(dt.getDate());
+  }
+  return '';
+}
+
 // Coleta acionamentos de uma base específica com filtros aplicados
 function collectBaseActions(baseKey, cutoffStr) {
   const cfg = BASE_CONFIG[baseKey];
@@ -4130,10 +4173,7 @@ function collectBaseActions(baseKey, cutoffStr) {
 
       // Filtro de período
       if (cutoffStr) {
-        var raw2 = String(a.datetime || a.date || '');
-        var mBR = raw2.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-        var ds = mBR ? (mBR[3] + '-' + mBR[2] + '-' + mBR[1]) : '';
-        if (!ds) { var mISO = raw2.match(/(\d{4}-\d{2}-\d{2})/); if (mISO) ds = mISO[1]; }
+        var ds = parseDateToISO(a.datetime || a.date || '');
         if (!ds || ds < cutoffStr) return;
       }
       // Filtro de atendente
@@ -4510,11 +4550,7 @@ function getRecentActions(days) {
   Object.entries(HISTORY).forEach(([mat, h]) => h.forEach(a => {
     // Filtrar pela base ativa
     if ((a.base || 'impar') !== ACTIVE_BASE) return;
-    const raw = String(a.datetime || a.date || '');
-    let dateStr = '';
-    const mBR = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (mBR) dateStr = mBR[3] + '-' + mBR[2] + '-' + mBR[1];
-    else { const mISO = raw.match(/(\d{4}-\d{2}-\d{2})/); if (mISO) dateStr = mISO[1]; }
+    const dateStr = parseDateToISO(a.datetime || a.date || '');
     if (!dateStr || dateStr < cutoffStr) return;
     count++; students.add(mat); if (a.atend) atends.add(a.atend);
   }));
