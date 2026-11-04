@@ -1283,6 +1283,29 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <option value="PRES">Presencial / Semi</option>
           </select>
         </div>
+        <div style="flex:1;min-width:140px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Canal (acionamento)</label>
+          <select id="polo-filtro-canal-ac" class="search-input" onchange="renderPolo()" style="width:100%">
+            <option value="">Todos os canais</option>
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="E-mail">E-mail</option>
+            <option value="Ligação">Ligação</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:140px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Atendente (acion.)</label>
+          <select id="polo-filtro-atend-ac" class="search-input" onchange="renderPolo()" style="width:100%">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:140px">
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Acionamento</label>
+          <select id="polo-filtro-ac-status" class="search-input" onchange="renderPolo()" style="width:100%">
+            <option value="">Todos</option>
+            <option value="com_ac">Com acionamento</option>
+            <option value="sem_ac">Sem acionamento</option>
+          </select>
+        </div>
         <div style="flex:2;min-width:200px">
           <label style="display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Busca</label>
           <input type="text" id="polo-busca" class="search-input" placeholder="Nome ou matrícula..." oninput="renderPolo()" style="width:100%">
@@ -9202,13 +9225,16 @@ function renderPolo() {
     if (tb) tb.innerHTML = '<tr><td colspan="9" style="padding:30px;text-align:center;color:var(--text3)">Selecione uma base para carregar os dados.</td></tr>';
     return;
   }
-  var tipo       = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
-  var filtroSit  = (document.getElementById('polo-filtro-sit')||{}).value||'todos';
-  var filtroCurso= ((document.getElementById('polo-filtro-curso')||{}).value||'').trim();
-  var filtroModal= ((document.getElementById('polo-filtro-modal')||{}).value||'').trim();
-  var filtroDtDe = (document.getElementById('polo-filtro-dt-de')||{}).value||'';
-  var filtroDtAte= (document.getElementById('polo-filtro-dt-ate')||{}).value||'';
-  var busca      = ((document.getElementById('polo-busca')||{}).value||'').toLowerCase().trim();
+  var tipo         = (document.getElementById('polo-filtro-tipo')||{}).value||'av';
+  var filtroSit    = (document.getElementById('polo-filtro-sit')||{}).value||'todos';
+  var filtroCurso  = ((document.getElementById('polo-filtro-curso')||{}).value||'').trim();
+  var filtroModal  = ((document.getElementById('polo-filtro-modal')||{}).value||'').trim();
+  var filtroDtDe   = (document.getElementById('polo-filtro-dt-de')||{}).value||'';
+  var filtroDtAte  = (document.getElementById('polo-filtro-dt-ate')||{}).value||'';
+  var filtroCanalAc= ((document.getElementById('polo-filtro-canal-ac')||{}).value||'').trim();
+  var filtroAtendAc= ((document.getElementById('polo-filtro-atend-ac')||{}).value||'').trim();
+  var filtroAcStatus=((document.getElementById('polo-filtro-ac-status')||{}).value||'').trim();
+  var busca        = ((document.getElementById('polo-busca')||{}).value||'').toLowerCase().trim();
 
   var elegiveis = DB.filter(function(r){ return isEligPolo(r, tipo); });
   var cntSemAdesao=0, cntAgendado=0, cntEad=0, cntPres=0;
@@ -9227,6 +9253,21 @@ function renderPolo() {
   setText('polo-cnt-ead', cntEad);
   setText('polo-cnt-pres', cntPres);
 
+  // Popula select de atendentes com quem aparece no HISTORY (apenas 1x)
+  (function(){
+    var selA = document.getElementById('polo-filtro-atend-ac');
+    if (!selA) return;
+    var prev = selA.value;
+    var atends = new Set();
+    elegiveis.forEach(function(r){
+      var entries = (HISTORY && HISTORY[r.COD_MATRICULA]) ? HISTORY[r.COD_MATRICULA] : [];
+      entries.forEach(function(e){ if(e.atendente) atends.add(e.atendente); });
+    });
+    selA.innerHTML = '<option value="">Todos</option>' +
+      Array.from(atends).sort().map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
+    if (prev) selA.value = prev;
+  })();
+
   var lista = elegiveis.filter(function(r){
     var sit = getSituacaoPolo(r, tipo);
     if (filtroCurso && (r.NOM_CURSO||'').trim() !== filtroCurso) return false;
@@ -9239,6 +9280,20 @@ function renderPolo() {
       var dtISO = _dtParaISO(r['DT_PROXIMA_PROVA_AGENDADA']);
       if (filtroDtDe  && (!dtISO || dtISO < filtroDtDe))  return false;
       if (filtroDtAte && (!dtISO || dtISO > filtroDtAte)) return false;
+    }
+    // Filtros relacionados a acionamentos
+    var hEntries = (HISTORY && HISTORY[r.COD_MATRICULA]) ? HISTORY[r.COD_MATRICULA] : [];
+    var temAc = hEntries.length > 0;
+    if (filtroAcStatus === 'com_ac' && !temAc) return false;
+    if (filtroAcStatus === 'sem_ac' &&  temAc) return false;
+    if (filtroCanalAc || filtroAtendAc) {
+      // Precisa ter pelo menos 1 acionamento que bata canal E atendente selecionados
+      var match = hEntries.some(function(e){
+        var canalOk  = !filtroCanalAc || (e.canal||e.canal_envio||'') === filtroCanalAc;
+        var atendOk  = !filtroAtendAc || (e.atendente||'') === filtroAtendAc;
+        return canalOk && atendOk;
+      });
+      if (!match) return false;
     }
     if (filtroSit === 'sem_adesao')       return sit !== 'agendado';
     if (filtroSit === 'agendado')         return sit === 'agendado';
