@@ -1894,6 +1894,10 @@ input[type=checkbox].row-cb,input[type=checkbox]#cb-all{width:15px;height:15px;c
             <button class="danger-btn danger-btn-hist" style="margin:0;padding:6px 12px;width:auto" onclick="adminClearPeriodo()">🗑️ Apagar</button>
           </div>
           <div id="admin-result" style="margin-top:12px;font-size:12px"></div>
+
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--border)">Manutenção de armazenamento</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Use se aparecer erro de "quota exceeded" ao importar uma base.</div>
+          <button class="btn btn-sm" style="background:#e9ecef;border:none;width:100%;padding:8px;font-size:12px" onclick="limparLocalStorageChunks()">🧹 Liberar espaço (limpar chunks antigos do localStorage)</button>
         </div>
 
       </div><!-- fim admin-panel-page -->
@@ -2432,10 +2436,56 @@ function idbGet(k) {
   });
 }
 
+// Limpa TODOS os chunks e bases antigas do localStorage (manutenção manual)
+function limparLocalStorageChunks() {
+  var liberadas = 0;
+  // Limpa chunks de todas as bases conhecidas
+  Object.values(BASE_CONFIG).forEach(function(cfg) {
+    var keys = [cfg.storageDB, cfg.storageDB + '_par', cfg.storageDB + '_ct'];
+    keys.forEach(function(k) {
+      if (!k) return;
+      var n = parseInt(localStorage.getItem(k + '_chunks') || '0', 10);
+      for (var ci = 0; ci <= n + 10; ci++) {
+        if (localStorage.getItem(k + '_c' + ci) !== null) { localStorage.removeItem(k + '_c' + ci); liberadas++; }
+      }
+      localStorage.removeItem(k + '_chunks');
+      // Remove a chave direta se for grande (> 1MB) — será relida do IndexedDB
+      var v = localStorage.getItem(k);
+      if (v && v.length > 500000) { localStorage.removeItem(k); liberadas++; }
+    });
+    // Limpa snaps antigos (manter só IndexedDB)
+    if (cfg.storageSnaps) { localStorage.removeItem(cfg.storageSnaps); }
+  });
+  // Limpa chaves legado
+  ['crm_db_z', 'crm_db_par_z', 'crm_db_ct_z'].forEach(function(k){ localStorage.removeItem(k); });
+  var msg = liberadas > 0
+    ? '✅ ' + liberadas + ' itens removidos. Agora tente importar a base novamente.'
+    : '✅ Nenhum chunk antigo encontrado. localStorage já está limpo.';
+  document.getElementById('admin-result').innerHTML = '<span style="color:var(--green)">' + msg + '</span>';
+  showToast('🧹 Limpeza concluída!');
+}
+
+// Limpa do localStorage todos os vestígios de uma chave de base (chunks antigos)
+function _limparLocalStorageBase(k) {
+  try {
+    // remove chave direta
+    localStorage.removeItem(k);
+    localStorage.removeItem(k + '_v');
+    localStorage.removeItem(k + '_z');
+    // remove chunks antigos
+    var oldChunks = parseInt(localStorage.getItem(k + '_chunks') || '0', 10);
+    for (var ci = 0; ci < oldChunks + 20; ci++) localStorage.removeItem(k + '_c' + ci);
+    localStorage.removeItem(k + '_chunks');
+  } catch(e) {}
+}
+
 async function saveDB(db, key) {
   const k = key || BASE_CONFIG[ACTIVE_BASE].storageDB;
   _memStore[k] = db;
   const json = JSON.stringify(db);
+
+  // Sempre limpa vestígios antigos antes de tentar gravar (libera espaço)
+  _limparLocalStorageBase(k);
 
   // 1. Tentar localStorage normal
   try {
@@ -2458,7 +2508,10 @@ async function saveDB(db, key) {
     localStorage.setItem(k + '_v', DB_VER);
     console.log('[saveDB] chunks localStorage:', k, chunks, 'chunks,', Math.round(json.length/1024), 'KB');
     return true;
-  } catch(e) {}
+  } catch(e) {
+    // Chunks também falharam — limpa tudo e vai para IndexedDB
+    _limparLocalStorageBase(k);
+  }
 
   // 3. Fallback final: IndexedDB
   try {
@@ -4623,8 +4676,12 @@ async function saveSnapshot(label) {
   if (SNAPSHOTS.length > 20) SNAPSHOTS = SNAPSHOTS.slice(0, 20);
   const snapKey = BASE_CONFIG[ACTIVE_BASE].storageSnaps || 'crm_snaps';
   const json = JSON.stringify(SNAPSHOTS);
-  localStorage.setItem(snapKey, json);
-  if (window.storage) await window.storage.set(snapKey, json, true);
+  // Snaps são pequenos mas localStorage pode estar cheio (base em chunks);
+  // salva no IndexedDB sempre e tenta localStorage sem bloquear a importação.
+  try { localStorage.setItem(snapKey, json); } catch(e) {
+    console.warn('[saveSnapshot] localStorage cheio, usando apenas IndexedDB:', e.message);
+  }
+  if (window.storage) { try { await window.storage.set(snapKey, json, true); } catch(e2) {} }
 }
 
 function getRecentActions(days) {
@@ -5410,7 +5467,7 @@ async function adminClearAll() {
   Object.values(BASE_CONFIG).forEach(c => {
     _allKeys.push(c.storageDB, c.storageDB+'_v', c.storageH, c.storageC, c.storageF, c.storageSnaps);
   });
-  _allKeys.forEach(k => { if(k) localStorage.removeItem(k); });
+  _allKeys.forEach(k => { if(k) { localStorage.removeItem(k); _limparLocalStorageBase(k); } });
   Object.values(BASE_CONFIG).forEach(c => { _memStore[c.storageDB] = null; });
   if (GAS_URL) { await gasCall('clearAll'); }
   renderTable(); renderDashboard(); renderProdutividade(); updatePriorityCounts();
