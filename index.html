@@ -9132,12 +9132,16 @@ function exportarEstagioXLSX(){
 }
 
 // ========== POLO — PROVAS PRESENCIAIS ==========
-var _POLO_STORAGE_KEY = 'crm_polo_data';
+// Chave separada por base para não misturar observações entre semestres
+function _poloStorageKey() {
+  return 'crm_polo_data_' + (ACTIVE_BASE || 'impar');
+}
 var POLO_DATA = {};
 var _POLO_SELECTED = new Set();
 
 function _loadPoloData() {
-  try { POLO_DATA = JSON.parse(localStorage.getItem(_POLO_STORAGE_KEY)||'{}'); } catch(e){ POLO_DATA={}; }
+  var k = _poloStorageKey();
+  try { POLO_DATA = JSON.parse(localStorage.getItem(k)||'{}'); } catch(e){ POLO_DATA={}; }
   if (GAS_URL) {
     gasCall('loadPoloData', { base: ACTIVE_BASE }).then(function(res){
       if (res && res.data) {
@@ -9147,7 +9151,7 @@ function _loadPoloData() {
           var tsR = remoto._ts||0, tsL = local._ts||0;
           if (tsR > tsL) POLO_DATA[mat] = remoto;
         });
-        try { localStorage.setItem(_POLO_STORAGE_KEY, JSON.stringify(POLO_DATA)); } catch(e) {}
+        try { localStorage.setItem(k, JSON.stringify(POLO_DATA)); } catch(e) {}
         renderPolo();
       }
     }).catch(function(){});
@@ -9155,7 +9159,14 @@ function _loadPoloData() {
 }
 
 function _savePoloData() {
-  try { localStorage.setItem(_POLO_STORAGE_KEY, JSON.stringify(POLO_DATA)); } catch(e) {}
+  var k = _poloStorageKey();
+  try { localStorage.setItem(k, JSON.stringify(POLO_DATA)); } catch(e) {
+    // localStorage cheio — tentar liberar chaves antigas de outras bases
+    ['impar','par','ct'].forEach(function(b){
+      if (b !== ACTIVE_BASE) localStorage.removeItem('crm_polo_data_' + b);
+    });
+    try { localStorage.setItem(k, JSON.stringify(POLO_DATA)); } catch(e2) {}
+  }
   if (GAS_URL) {
     gasCall('savePoloData', { base: ACTIVE_BASE, data: POLO_DATA }).catch(function(e){
       console.warn('[_savePoloData] falha GAS:', e);
@@ -9163,8 +9174,57 @@ function _savePoloData() {
   }
 }
 
+// Retorna todos os acionamentos de um aluno somando TODAS as bases (ativa + outras no localStorage)
+function _getHistoryAllBases(mat) {
+  var entries = (HISTORY && HISTORY[mat]) ? HISTORY[mat].slice() : [];
+  var seen = new Set(entries.map(function(a){ return a.id || ((a.datetime||'')+'|'+(a.atendente||a.atend||'')); }));
+  Object.values(BASE_CONFIG).forEach(function(cfg){
+    if (cfg.storageH === BASE_CONFIG[ACTIVE_BASE].storageH) return; // base ativa já está em HISTORY
+    try {
+      var raw = localStorage.getItem(cfg.storageH);
+      if (!raw) return;
+      var h = JSON.parse(raw);
+      var list = h[mat];
+      if (!list || !list.length) return;
+      list.forEach(function(a){
+        var k = a.id || ((a.datetime||'')+'|'+(a.atendente||a.atend||''));
+        if (!seen.has(k)) { seen.add(k); entries.push(a); }
+      });
+    } catch(e) {}
+  });
+  return entries;
+}
+
+// Pré-carrega histórico das bases não-ativas no localStorage (fonte para _getHistoryAllBases)
+// Roda em background ao abrir a aba Provas
+async function _preCarregarHistoricoOutrasBases() {
+  for (var bk in BASE_CONFIG) {
+    if (bk === ACTIVE_BASE) continue;
+    var cfg = BASE_CONFIG[bk];
+    var jaTemLocal = localStorage.getItem(cfg.storageH);
+    if (jaTemLocal) continue; // já está disponível
+    try {
+      // Tenta STORE (IndexedDB) primeiro
+      var h = await STORE.get(cfg.storageH);
+      if (h && Object.keys(h).length > 0) {
+        try { localStorage.setItem(cfg.storageH, JSON.stringify(h)); } catch(e) {}
+        continue;
+      }
+      // Se não, tenta GAS
+      if (GAS_URL) {
+        var res = await gasCall('getHistory', { base: bk });
+        if (res && res.ok && res.data && Object.keys(res.data).length > 0) {
+          try { localStorage.setItem(cfg.storageH, JSON.stringify(res.data)); } catch(e) {}
+        }
+      }
+    } catch(e) {}
+  }
+  renderPolo(); // re-renderiza após carregar histórico das outras bases
+}
+
 function _initPolo() {
   _loadPoloData();
+  _preCarregarHistoricoOutrasBases().catch(function(){}); // carrega histórico cross-base em background
   var sel = document.getElementById('polo-atend-sel');
   if (sel && ATENDENTES) {
     sel.innerHTML = '<option value="">— selecione —</option>' +
@@ -9317,8 +9377,8 @@ function renderPolo() {
     var prev = selA.value;
     var atends = new Set();
     elegiveis.forEach(function(r){
-      var entries = (HISTORY && HISTORY[r.COD_MATRICULA]) ? HISTORY[r.COD_MATRICULA] : [];
-      entries.forEach(function(e){ if(e.atendente) atends.add(e.atendente); });
+      var entries = _getHistoryAllBases(r.COD_MATRICULA);
+      entries.forEach(function(e){ if(e.atendente||e.atend) atends.add(e.atendente||e.atend); });
     });
     selA.innerHTML = '<option value="">Todos</option>' +
       Array.from(atends).sort().map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('');
@@ -9338,8 +9398,8 @@ function renderPolo() {
       if (filtroDtDe  && (!dtISO || dtISO < filtroDtDe))  return false;
       if (filtroDtAte && (!dtISO || dtISO > filtroDtAte)) return false;
     }
-    // Filtros relacionados a acionamentos
-    var hEntries = (HISTORY && HISTORY[r.COD_MATRICULA]) ? HISTORY[r.COD_MATRICULA] : [];
+    // Filtros relacionados a acionamentos — considera TODAS as bases
+    var hEntries = _getHistoryAllBases(r.COD_MATRICULA);
     var temAc = hEntries.length > 0;
     if (filtroAcStatus === 'com_ac' && !temAc) return false;
     if (filtroAcStatus === 'sem_ac' &&  temAc) return false;
@@ -9388,9 +9448,9 @@ function renderPolo() {
     var dtFormatada = _dtForDisplay(r['DT_PROXIMA_PROVA_AGENDADA']) || '<span style="color:var(--text3)">—</span>';
     var obsVal       = (d.obs||'').replace(/"/g,'&quot;');
 
-    // Último acionamento — busca no HISTORY a entrada mais recente para esta matrícula
+    // Último acionamento — busca em TODAS as bases (ativa + outras no localStorage)
     var ultimoAcHtml = '<span style="color:var(--text3)">—</span>';
-    var histEntries  = HISTORY && HISTORY[r.COD_MATRICULA] ? HISTORY[r.COD_MATRICULA] : [];
+    var histEntries  = _getHistoryAllBases(r.COD_MATRICULA);
     if (histEntries.length) {
       var sorted = histEntries.slice().sort(function(a,b){
         return (b.datetime||'').localeCompare(a.datetime||'');
@@ -9398,7 +9458,7 @@ function renderPolo() {
       var ult = sorted[0];
       var ultDate = ult.date || (ult.datetime||'').split(' ')[0] || '';
       var ultCanal = ult.canal || ult.canal_envio || '';
-      var ultAtend = ult.atendente || '';
+      var ultAtend = ult.atendente || ult.atend || '';
       ultimoAcHtml =
         '<span style="font-size:12px;font-weight:600">'+(ultDate||'')+'</span>'+
         (ultCanal ? '<br><span style="font-size:10px;color:var(--text3)">'+ultCanal+'</span>' : '')+
