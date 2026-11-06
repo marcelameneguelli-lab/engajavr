@@ -2760,8 +2760,8 @@ function _atualizarTopbarUsuario() {
   var avatarEl = document.getElementById('topbar-user-avatar');
   if (nomeEl) nomeEl.textContent = _usuarioLogado.nome;
   if (avatarEl) avatarEl.textContent = _usuarioLogado.nome.charAt(0).toUpperCase();
-  // Selecionar automaticamente o atendente correspondente nos selects
-  var sels = document.querySelectorAll('#atend-sel, #fin-atend-sel, #est-atend-sel');
+  // Selecionar automaticamente o atendente correspondente em todos os selects de ação
+  var sels = document.querySelectorAll('#atend-sel, #fin-atend-sel, #est-atend-sel, #m-atend, #lote-atend');
   sels.forEach(function(sel) {
     if (!sel) return;
     for (var i = 0; i < sel.options.length; i++) {
@@ -3383,7 +3383,15 @@ function openModal(mat) {
   document.getElementById('m-email').value = c.email || r.END_EMAIL || '';
   } // end else (_semDB)
 
-  document.getElementById('m-atend').value = (_usuarioLogado && _usuarioLogado.nome) ? _usuarioLogado.nome : (localStorage.getItem('crm_last_atend') || '');
+  // Garante que o select de atendente já tem a opção do usuário logado antes de setar
+  var _mAtend = document.getElementById('m-atend');
+  var _nomeLogado = (_usuarioLogado && _usuarioLogado.nome) ? _usuarioLogado.nome : (localStorage.getItem('crm_last_atend') || '');
+  if (_nomeLogado && _mAtend && !Array.from(_mAtend.options).some(function(o){ return o.value === _nomeLogado; })) {
+    _mAtend.innerHTML = ATENDENTES.length
+      ? ATENDENTES.map(function(a){ return '<option value="'+a+'">'+a+'</option>'; }).join('')
+      : '<option value="'+_nomeLogado+'">'+_nomeLogado+'</option>';
+  }
+  if (_mAtend) _mAtend.value = _nomeLogado;
   document.getElementById('m-tipo').value = '';
   if (document.getElementById('m-fu-date'))   document.getElementById('m-fu-date').value = '';
   if (document.getElementById('m-fu-motivo')) document.getElementById('m-fu-motivo').value = '';
@@ -3779,21 +3787,27 @@ function removerAtendente(idx) {
 }
 
 function populateAtendSelects() {
+  // Nome do usuário logado para pré-selecionar automaticamente
+  var nomeLogado = (_usuarioLogado && _usuarioLogado.nome) ? _usuarioLogado.nome : '';
+
   // Preencher todos os selects de atendente
   var selIds = ['m-atend', 'lote-atend', 'admin-atend-sel'];
   selIds.forEach(function(id) {
     var sel = document.getElementById(id);
     if (!sel || sel.tagName !== 'SELECT') return;
     var cur = sel.value;
-    // Manter opção vazia inicial
+    // Admin sempre começa vazio para escolha explícita
+    // Outros selects: se há usuário logado, pré-seleciona; senão mantém opção vazia
     var firstOpt = id === 'admin-atend-sel'
       ? '<option value="">— selecionar atendente —</option>'
-      : '<option value="">Selecione o atendente...</option>';
+      : (nomeLogado ? '' : '<option value="">Selecione o atendente...</option>');
     sel.innerHTML = firstOpt + ATENDENTES.map(function(a) {
-      return '<option value="' + a + '"' + (a === cur ? ' selected' : '') + '>' + a + '</option>';
+      var selected = (cur && a === cur) || (!cur && a === nomeLogado);
+      return '<option value="' + a + '"' + (selected ? ' selected' : '') + '>' + a + '</option>';
     }).join('');
-    // Restaurar seleção anterior
+    // Restaurar seleção anterior se ainda válida
     if (cur && ATENDENTES.includes(cur)) sel.value = cur;
+    else if (nomeLogado && id !== 'admin-atend-sel') sel.value = nomeLogado;
   });
   // Também atualizar o select de filtro de atendente no follow-up
   var fuSel = document.getElementById('fu-atend-filter');
