@@ -102,6 +102,8 @@ function handleRequest(e) {
       case 'getEvasaoData':    result = getEvasaoData(body.base); break;
       case 'saveEvasaoData':   result = saveEvasaoData(body.base, body.data); break;
       case 'mergeEvasaoData':  result = mergeEvasaoData(body.base, body.data); break;
+      case 'saveSnaps':       result = saveSnaps(body.base, body.snaps);      break;
+      case 'getSnaps':        result = getSnaps(body.base);                   break;
             default: result = { ok: false, error: 'Ação desconhecida: ' + action };
     }
     return respond(result);
@@ -1298,4 +1300,33 @@ function saveUsuarios(data) {
   if (!data || !data.usuarios) return { ok: false, error: 'usuarios ausente' };
   storeSet('UsuariosJSON', JSON.stringify(data.usuarios));
   return { ok: true, saved: data.usuarios.length };
+}
+
+// ── SNAPSHOTS DE EVOLUÇÃO DA BASE ────────────────────────────────
+// Armazena o histórico de evolução no PropertiesService do GAS
+// (até 9KB por propriedade; comprimimos mantendo só os últimos 20 snaps)
+
+function saveSnaps(base, snaps) {
+  if (!base || !snaps) return { ok: false, error: 'base ou snaps ausente' };
+  var key = 'snaps_' + base;
+  try {
+    var json = JSON.stringify(snaps);
+    storeSet(key, json);
+    return { ok: true, saved: snaps.length };
+  } catch(e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function getSnaps(base) {
+  if (!base) return { ok: false, error: 'base ausente' };
+  var key = 'snaps_' + base;
+  try {
+    var raw = storeGet(key);
+    if (!raw) return { ok: true, snaps: [] };
+    var snaps = JSON.parse(raw);
+    return { ok: true, snaps: Array.isArray(snaps) ? snaps : [] };
+  } catch(e) {
+    return { ok: false, error: e.message };
+  }
 }

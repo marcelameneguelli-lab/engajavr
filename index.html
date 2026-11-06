@@ -4642,20 +4642,35 @@ let SNAPSHOTS = [];
 async function loadSnapshots(key) {
   const k = key || BASE_CONFIG[ACTIVE_BASE].storageSnaps || 'crm_snaps';
   SNAPSHOTS = [];
+  // 1. Memória desta sessão (mais rápido, sem I/O)
+  if (_memStore[k] && Array.isArray(_memStore[k]) && _memStore[k].length) {
+    SNAPSHOTS = _memStore[k];
+    return;
+  }
+  // 2. localStorage como cache rápido (pode estar vazio/cheio)
   try {
-    // 1. Tenta localStorage direto
     const raw = localStorage.getItem(k);
     if (raw && raw !== 'null') {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length) { SNAPSHOTS = parsed; return; }
+      if (Array.isArray(parsed) && parsed.length) {
+        SNAPSHOTS = parsed;
+        _memStore[k] = parsed; // popula memória para próximas chamadas
+        return;
+      }
     }
-    // 2. Tenta _memStore (snapshots salvos nesta sessão quando localStorage estava cheio)
-    if (_memStore[k]) {
-      const v = _memStore[k];
-      const parsed = Array.isArray(v) ? v : (typeof v === 'string' ? JSON.parse(v) : null);
-      if (parsed && parsed.length) { SNAPSHOTS = parsed; return; }
-    }
-  } catch(e) { SNAPSHOTS = []; }
+  } catch(e) {}
+  // 3. GAS (fonte de verdade em nuvem)
+  if (GAS_URL) {
+    try {
+      const res = await gasCall('getSnaps', { base: ACTIVE_BASE });
+      if (res && res.ok && Array.isArray(res.snaps) && res.snaps.length) {
+        SNAPSHOTS = res.snaps;
+        _memStore[k] = res.snaps;
+        try { localStorage.setItem(k, JSON.stringify(res.snaps)); } catch(e) {}
+        return;
+      }
+    } catch(e) { console.warn('[loadSnapshots] GAS falhou:', e); }
+  }
 }
 
 const isEligSn = (r,col) => r[col]===1||r[col]==='1'||parseFloat(r[col])===1;
@@ -4680,13 +4695,18 @@ async function saveSnapshot(label) {
   SNAPSHOTS.unshift(snap);
   if (SNAPSHOTS.length > 20) SNAPSHOTS = SNAPSHOTS.slice(0, 20);
   const snapKey = BASE_CONFIG[ACTIVE_BASE].storageSnaps || 'crm_snaps';
-  const json = JSON.stringify(SNAPSHOTS);
-  // Snaps são pequenos mas localStorage pode estar cheio (base em chunks);
-  // salva no IndexedDB sempre e tenta localStorage sem bloquear a importação.
-  try { localStorage.setItem(snapKey, json); } catch(e) {
-    console.warn('[saveSnapshot] localStorage cheio, usando apenas IndexedDB:', e.message);
+  // 1. Sempre salva em memória (imediato, sem falha)
+  _memStore[snapKey] = SNAPSHOTS;
+  // 2. Tenta localStorage (pode falhar se cheio — não bloqueia)
+  try { localStorage.setItem(snapKey, JSON.stringify(SNAPSHOTS)); } catch(e) {
+    console.warn('[saveSnapshot] localStorage cheio, usando nuvem:', e.message);
   }
-  try { await STORE.set(snapKey, SNAPSHOTS); } catch(e2) {}
+  // 3. Salva no GAS em background (fonte de verdade persistente)
+  if (GAS_URL) {
+    gasCall('saveSnaps', { base: ACTIVE_BASE, snaps: SNAPSHOTS }).catch(function(e) {
+      console.warn('[saveSnapshot] GAS falhou:', e);
+    });
+  }
 }
 
 function getRecentActions(days) {
