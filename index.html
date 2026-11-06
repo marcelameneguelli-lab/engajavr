@@ -4641,14 +4641,19 @@ let SNAPSHOTS = [];
 
 async function loadSnapshots(key) {
   const k = key || BASE_CONFIG[ACTIVE_BASE].storageSnaps || 'crm_snaps';
-  SNAPSHOTS = []; // sempre zerar antes de carregar
+  SNAPSHOTS = [];
   try {
-    if (window.storage) {
-      const r = await window.storage.get(k, true);
-      if (r) SNAPSHOTS = JSON.parse(r.value || r) || [];
-    } else {
-      const r = localStorage.getItem(k);
-      if (r && r !== 'null') SNAPSHOTS = JSON.parse(r) || [];
+    // 1. Tenta localStorage direto
+    const raw = localStorage.getItem(k);
+    if (raw && raw !== 'null') {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) { SNAPSHOTS = parsed; return; }
+    }
+    // 2. Tenta _memStore (snapshots salvos nesta sessão quando localStorage estava cheio)
+    if (_memStore[k]) {
+      const v = _memStore[k];
+      const parsed = Array.isArray(v) ? v : (typeof v === 'string' ? JSON.parse(v) : null);
+      if (parsed && parsed.length) { SNAPSHOTS = parsed; return; }
     }
   } catch(e) { SNAPSHOTS = []; }
 }
@@ -4681,7 +4686,7 @@ async function saveSnapshot(label) {
   try { localStorage.setItem(snapKey, json); } catch(e) {
     console.warn('[saveSnapshot] localStorage cheio, usando apenas IndexedDB:', e.message);
   }
-  if (window.storage) { try { await window.storage.set(snapKey, json, true); } catch(e2) {} }
+  try { await STORE.set(snapKey, SNAPSHOTS); } catch(e2) {}
 }
 
 function getRecentActions(days) {
