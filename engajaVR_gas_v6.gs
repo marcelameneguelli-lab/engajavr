@@ -168,109 +168,110 @@ function getOrCreate(name, headers) {
   return sh;
 }
 
-// Storage: usa PropertiesService para dados pequenos (<9KB)
-// e células da planilha em chunks para dados maiores
+// ── STORAGE ──────────────────────────────────────────────────────
+// Hierarquia de armazenamento:
+//   1. PropertiesService  → dados pequenos (<9KB): snapshots, timestamps, configs
+//   2. Google Drive (JSON) → dados grandes (base de alunos, histórico)
+//      Arquivo nomeado "engajavr_<key>.json" na pasta raiz do Drive do script
+//   3. Planilha em chunks → fallback legado (mantido para leitura retrocompatível)
+//
+// Esta abordagem elimina o erro "20.000.000 de células" do Sheets.
+
+// Retorna (ou cria) a pasta "EngajaVR_Storage" no Drive do usuário proprietário do script
+function getDriveFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var folderId = props.getProperty('_drive_folder_id');
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); } catch(e) {}
+  }
+  // Cria a pasta uma única vez e grava o ID
+  var folder = DriveApp.createFolder('EngajaVR_Storage');
+  props.setProperty('_drive_folder_id', folder.getId());
+  return folder;
+}
+
+// Lê o arquivo "engajavr_<key>.json" do Drive
+function driveGet(key) {
+  try {
+    var folder = getDriveFolder();
+    var files = folder.getFilesByName('engajavr_' + key + '.json');
+    if (files.hasNext()) {
+      var f = files.next();
+      return f.getBlob().getDataAsString('UTF-8');
+    }
+  } catch(e) { Logger.log('driveGet erro: ' + e.message); }
+  return null;
+}
+
+// Grava (ou substitui) "engajavr_<key>.json" no Drive
+function driveSet(key, value) {
+  try {
+    var folder = getDriveFolder();
+    var fileName = 'engajavr_' + key + '.json';
+    var lock = LockService.getScriptLock();
+    try { lock.waitLock(10000); } catch(e) {}
+    try {
+      var files = folder.getFilesByName(fileName);
+      while (files.hasNext()) { files.next().setTrashed(true); } // remove versão antiga
+      folder.createFile(fileName, value, 'application/json');
+    } finally {
+      try { lock.releaseLock(); } catch(e) {}
+    }
+    return true;
+  } catch(e) {
+    Logger.log('driveSet erro: ' + e.message);
+    return false;
+  }
+}
+
 function storeGet(key) {
+  // 1. PropertiesService (rápido, para valores pequenos)
   try {
     var v = PropertiesService.getScriptProperties().getProperty(key);
     if (v) return v;
   } catch(e) {}
-  // Fallback: ler da planilha em chunks
+
+  // 2. Drive (para valores grandes — base de alunos, histórico)
+  var dv = driveGet(key);
+  if (dv) return dv;
+
+  // 3. Planilha em chunks (retrocompatibilidade com dados gravados pelo código antigo)
   try {
     var ss = getSheet();
     var shName = '_kv_' + key;
     var sh = ss.getSheetByName(shName);
-    var result = '';
     if (sh) {
+      var result = '';
       var lastRow = sh.getLastRow();
       for (var i = 1; i <= lastRow; i++) result += sh.getRange(i, 1).getValue();
-    }
-    // Mesclar abas de conflito (criadas por requisições simultâneas)
-    var allSheets = ss.getSheets();
-    var conflictPrefix = shName + '_conflict';
-    var conflictData = {};
-    allSheets.forEach(function(s) {
-      if (s.getName().indexOf(conflictPrefix) === 0) {
-        var cr = '';
-        var cl = s.getLastRow();
-        for (var ci = 1; ci <= cl; ci++) cr += s.getRange(ci, 1).getValue();
-        if (cr) {
-          try {
-            var parsed = JSON.parse(cr);
-            Object.keys(parsed).forEach(function(mat) {
-              if (!conflictData[mat]) conflictData[mat] = [];
-              parsed[mat].forEach(function(a) { conflictData[mat].push(a); });
-            });
-          } catch(e2) {}
-        }
-        // Apagar aba de conflito após ler
-        try { ss.deleteSheet(s); } catch(e3) {}
+      if (result) {
+        // Migra para Drive e remove a aba da planilha para liberar células
+        driveSet(key, result);
+        try { ss.deleteSheet(sh); } catch(e) {}
+        return result;
       }
-    });
-    // Se há dados de conflito, mesclar com resultado principal e salvar
-    if (Object.keys(conflictData).length > 0 && result) {
-      try {
-        var mainData = JSON.parse(result);
-        Object.keys(conflictData).forEach(function(mat) {
-          if (!mainData[mat]) mainData[mat] = [];
-          var existIds = {};
-          mainData[mat].forEach(function(a) { existIds[a.id||(a.datetime+a.atend)] = true; });
-          conflictData[mat].forEach(function(a) {
-            var k = a.id||(a.datetime+a.atend);
-            if (!existIds[k]) { mainData[mat].push(a); }
-          });
-        });
-        var merged = JSON.stringify(mainData);
-        storeSet(key, merged);
-        return merged;
-      } catch(e4) {}
     }
-    return result || null;
-  } catch(e) { return null; }
+  } catch(e) {}
+
+  return null;
 }
 
 function storeSet(key, value) {
   var val = String(value || '');
-  // Tentar PropertiesService (limite ~9KB)
+
+  // 1. PropertiesService para valores pequenos (<9KB)
   if (val.length < 9000) {
     try {
       PropertiesService.getScriptProperties().setProperty(key, val);
       return;
     } catch(e) {}
   }
-  // Para valores grandes: salvar em chunks na planilha
-  var ss = getSheet();
-  var shName = '_kv_' + key;
-  // Usar lock para evitar conflitos de escrita simultânea
-  var lock = LockService.getScriptLock();
-  var acquired = false;
-  try { lock.waitLock(8000); acquired = true; } catch(e) {
-    // Se não conseguiu lock, salvar em aba de conflito temporária
-    var conflictName = shName + '_conflict' + Date.now();
-    var csh = ss.insertSheet(conflictName);
-    csh.hideSheet();
-    var CHUNK2 = 45000;
-    var row2 = 1;
-    for (var j = 0; j < val.length; j += CHUNK2) {
-      csh.getRange(row2, 1).setValue(val.substring(j, j + CHUNK2));
-      row2++;
-    }
-    return;
-  }
-  try {
-    var sh = ss.getSheetByName(shName);
-    if (sh) ss.deleteSheet(sh);
-    sh = ss.insertSheet(shName);
-    sh.hideSheet();
-    var CHUNK = 45000;
-    var row = 1;
-    for (var i = 0; i < val.length; i += CHUNK) {
-      sh.getRange(row, 1).setValue(val.substring(i, i + CHUNK));
-      row++;
-    }
-  } finally {
-    if (acquired) lock.releaseLock();
-  }
+
+  // 2. Drive para valores grandes (sem limite de células do Sheets)
+  driveSet(key, val);
+
+  // Remove chave legada do PropertiesService se existir (evita conflito de leitura)
+  try { PropertiesService.getScriptProperties().deleteProperty(key); } catch(e) {}
 }
 
 // ── PING ────────────────────────────────────────────────────────
